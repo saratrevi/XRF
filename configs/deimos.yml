@@ -1,0 +1,16 @@
+paths:
+  element_data: data/element_params/Data_keV.xlsx
+  form_factors: data/form_factors/form_factor_coherent_scatter.xlsx
+  absorption_dir: data/absorption_coeffs
+  output_dir: results/deimos
+
+concentration_cols: ["CI"]
+
+all_matrix_elements: ["H","C","N","O","Na","Mg","Al","Si","P","S","Ca","Cr","Mn","Fe","Ni"]
+fluorescence_elements: ["Mg","Al","Si","P","S","Ca","Cr","Mn","Fe"]
+
+theta: 0.0
+phi: 0.0
+altitude: 3e6
+distance_sun_AU: 1.5
+footprint: 2.7e11
