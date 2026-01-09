@@ -20,6 +20,10 @@ def load_config(yaml_path: str | Path) -> dict:
 
     cfg = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
 
+    for k in ["theta", "phi", "altitude", "distance_sun_AU", "footprint"]:
+        if k in cfg:
+            cfg[k] = float(cfg[k])
+
     # Resolve paths
     paths = cfg.get("paths", {})
     cfg["paths"] = {

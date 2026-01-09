@@ -16,6 +16,19 @@ from .io import (
 from .physics import compute_coherent_scattering_sample, compute_k_fluorescence
 from .output import save_coherent_spectrum_txt
 
+def safe_float(x, default=0.0) -> float:
+    """Convert x to float; return default if x is missing/NaN/invalid."""
+    try:
+        if x is None:
+            return default
+        if isinstance(x, str) and x.strip() == "":
+            return default
+        if pd.isna(x):
+            return default
+        return float(x)
+    except Exception:
+        return default
+
 
 def run_one(flux_file: str | Path, cfg: dict) -> dict:
     flux_file = Path(flux_file)
@@ -110,17 +123,18 @@ def run_one(flux_file: str | Path, cfg: dict) -> dict:
             if w <= 0 or el not in cfg["fluorescence_elements"]:
                 continue
 
-            # Use your existing df columns (same logic as notebook)
-            E_edge = float(df.at[el, "K-edge Line"])
-            wK = float(df.at[el, "wK"])
-            R = float(df.at[el, "K alpha ratio"])
+            
+            E_edge = safe_float(df.at[el, "Absorption Edge"], default=0.0)
+            wK = safe_float(df.at[el, "Fluorescence Yield"], default=0.0)
+            R  = safe_float(df.at[el, "r-1/r"], default=0.0)
 
             # --- Kα ---
-            E_Ka = float(df.at[el, "K-alpha Line"])
-            P_Ka = float(df.at[el, "P_kalpha"])
+            E_Ka = safe_float(df.at[el, "K-Alpha Line"], default=0.0)
+            P_Ka = safe_float(df.at[el, "P_kalpha"], default=0.0)
             mu_Ka = float(f_atten_interp(E_Ka))
 
-            raw_Ka = compute_k_fluorescence(
+            if E_edge > 0 and E_Ka > 0 and P_Ka > 0:
+                raw_Ka = compute_k_fluorescence(
                 energy_array=common_energy,
                 flux_array=flux_scaled,
                 photoelectric_array_element=full_data_dict[el]["photoelectric_absorption_interp"],
@@ -129,8 +143,10 @@ def run_one(flux_file: str | Path, cfg: dict) -> dict:
                 absorption_edge=E_edge,
                 theta=theta,
                 phi=phi,
-            )
-            I_Ka = (raw_Ka * w * wK * R * P_Ka) / (4 * np.pi)
+                )
+                I_Ka = (raw_Ka * w * wK * R * P_Ka) / (4 * np.pi)
+            else:
+                I_Ka = 0.0
 
             fluorescence_rows.append({
                 "Element": el, "Concentration": w, "Line": "Kα",
@@ -138,8 +154,8 @@ def run_one(flux_file: str | Path, cfg: dict) -> dict:
             })
 
             # --- Kβ (optional if present)
-            E_Kb = float(df.at[el, "K-beta Line"]) if "K-beta Line" in df.columns else 0.0
-            P_Kb = float(df.at[el, "P_kbeta"])     if "P_kbeta"     in df.columns else 0.0
+            E_Kb = safe_float(df.at[el, "K-beta Line"], default=0.0)
+            P_Kb = safe_float(df.at[el, "P_kbeta"], default=0.0)
             if E_Kb > 0.0 and P_Kb > 0.0:
                 mu_Kb = float(f_atten_interp(E_Kb))
                 raw_Kb = compute_k_fluorescence(
