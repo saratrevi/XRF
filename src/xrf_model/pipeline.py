@@ -93,7 +93,9 @@ def run_one(flux_file: str | Path, cfg: dict) -> dict:
     #     el: interpolate_element_full_data(xs_data, common_energy)
     #     for el, xs_data in element_xs_data.items()
     # }
-    element_properties.realign(energy_solar_flare)
+
+    # NEW VERSION: not needed
+    # element_properties.realign(energy_solar_flare)
 
     # NOTE: these are other element properties that depend on the energy-time-angle scalar
     # --- Load form factors

@@ -1,11 +1,11 @@
 # src/xrf_model/physics.py
 from __future__ import annotations
-
 from typing import Iterable
 
 import numpy as np
 from scipy.interpolate import interp1d
-
+import xraylib
+# https://github.com/tschoonj/xraylib
 import pandas as pd
 import os
 from .io import (
@@ -13,6 +13,21 @@ from .io import (
     interpolate_element_full_data,
     load_form_factor_data,
 )
+
+# "Total cross section (Photoelectric + Compton + Rayleigh)"
+def _build_absorption_function(Z):
+    # Returns a callable: energy (keV) -> mass absorption coefficient
+    def mu(E):
+        return xraylib.CS_Total(Z, E)  # cm^2/g
+    return mu
+
+# "Atomic form factor for Rayleigh scattering"
+def _build_form_factor_function(Z):
+    # Returns a callable: q (momentum transfer) -> form factor
+    def f(q):
+        return xraylib.FF_Rayl(Z, q)
+    return f
+
 
 class ElementProperties:
     
@@ -25,12 +40,18 @@ class ElementProperties:
         # Retrieve element properties
         self.param_dict = {}
         for el in cfg["all_matrix_elements"]:
+            Z = xraylib.SymbolToAtomicNumber(el)
             pdata = {
                 "f_rel": self.df.at[el, "f_REL"],
+                # f_rel is the relativistic correction, didnt find it
                 "fNT": self.df.at[el, "f_NT"],
-                "Atomic Number": self.df.at[el, "Atomic Number"],
-                "Atomic Mass": self.df.at[el, "Atomic Mass"],
+                # f_NT is the nuclear Thomson scattering correction, didnt find it
+                "Atomic Number": Z,
+                "Atomic Mass": xraylib.AtomicWeight(Z),
+                #"Atomic Number": self.df.at[el, "Atomic Number"],
+                #"Atomic Mass": self.df.at[el, "Atomic Mass"],
             }
+            # EDIT: f_REL AND f_NT SHOULD NOT BE NECESSARY ANYMORE
             self.param_dict[el] = pdata
 
         # Absorption data
@@ -46,11 +67,11 @@ class ElementProperties:
         # Form factor data
         self.form_factor_dict = load_form_factor_data(cfg["paths"]["form_factors"])
 
-    def realign(self, common_energy):
-        self.full_data_dict = {
-            el: interpolate_element_full_data(xs_data, common_energy)
-            for el, xs_data in self.element_xs_data.items()
-        }
+    #def realign(self, common_energy):
+    #    self.full_data_dict = {
+    #        el: interpolate_element_full_data(xs_data, common_energy)
+    #        for el, xs_data in self.element_xs_data.items()
+    #    }
 
 
 def compute_fluorescence_spectrum(conc,
@@ -68,11 +89,18 @@ def compute_fluorescence_spectrum(conc,
     scattering_angle = np.pi - (theta + phi)
 
     sample_mass_atten_array = np.zeros_like(energy_solar_flare, dtype=float)
+    # --------------------------------------
+    # ------------NEW VERSION---------------
+    # --------------------------------------
     for el_name, w in concentrations.items():
         if w > 0:
-            sample_mass_atten_array += (
-                w * element_properties.full_data_dict[el_name]["total_mass_attenuation_interp"]
-            )
+            #sample_mass_atten_array += (
+            #    w * element_properties.full_data_dict[el_name]["total_mass_attenuation_interp"]
+            #)
+            Z = element_properties.param_dict[el_name]["Atomic Number"]
+            mu_vals = np.array([xraylib.CS_Total(Z, E) for E in energy_solar_flare])
+            sample_mass_atten_array += w * mu_vals
+
     scale = (footprint * np.cos(theta)) / (distance_sun_AU ** 2) # NOTE: we'll need to either change this (for now: just move it ealiers)
     flux_scaled = flux_solar_flare * scale * solid_angle
 
@@ -81,8 +109,8 @@ def compute_fluorescence_spectrum(conc,
         flux_array=flux_scaled,
         sample_mass_atten_array=sample_mass_atten_array,
         param_dict=element_properties.param_dict,
-        form_factor_dict=element_properties.form_factor_dict,
-        full_data_dict=element_properties.full_data_dict,
+        # form_factor_dict=element_properties.form_factor_dict,
+        # full_data_dict=element_properties.full_data_dict,
         concentration_key=conc,
         conc_df=conc_df,
         scattering_angle=scattering_angle,
@@ -113,7 +141,8 @@ def compute_fluorescence_spectrum(conc,
             raw_Ka = compute_k_fluorescence(
             energy_array=energy_solar_flare,
             flux_array=flux_scaled,
-            photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
+            # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
+            Z=params["Atomic Number"],
             total_atten_sample_array=sample_mass_atten_array,
             total_atten_sample_at_line=mu_Ka,
             absorption_edge=E_edge,
@@ -138,7 +167,8 @@ def compute_fluorescence_spectrum(conc,
             raw_Kb = compute_k_fluorescence(
                 energy_array=energy_solar_flare,
                 flux_array=flux_scaled,
-                photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
+                # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
+                Z=params["Atomic Number"],
                 total_atten_sample_array=sample_mass_atten_array,
                 total_atten_sample_at_line=mu_Kb,
                 absorption_edge=E_edge,
@@ -164,8 +194,8 @@ def compute_coherent_scattering_sample(
     flux_array,
     sample_mass_atten_array,
     param_dict,
-    form_factor_dict,
-    full_data_dict,
+    # form_factor_dict,
+    # full_data_dict,
     conc_df,
     concentration_key,
     scattering_angle,
@@ -204,35 +234,29 @@ def compute_coherent_scattering_sample(
 
     # Initialize the sample's coherent cross section array.
     sigma_coh_sample = np.zeros_like(energy_array)
-    
+
+    # --------------------------------------
+    # ------------NEW VERSION---------------
+    # --------------------------------------
     for el_name in param_dict:
-        if (el_name in form_factor_dict) and (el_name in full_data_dict):
-            # f₀ from the form factor Excel file:
-            f0_interp = form_factor_dict[el_name]
-            f0_vals = f0_interp(x_values)
-            
-            # f₁ and f₂ from the element's text file:
-            f1_vals = full_data_dict[el_name]["f1_interp"]
-            f2_vals = full_data_dict[el_name]["f2_interp"]
-            # Extra parameters:
-            f_rel = param_dict[el_name]["f_rel"]
-            fNT = param_dict[el_name]["fNT"]
-            Z_val = param_dict[el_name]["Atomic Number"]
-            
-            # Compute corrected real and imaginary parts.
-            Re_f = f0_vals + f1_vals + f_rel - Z_val + fNT
-            Im_f = f2_vals
-            f_eff = np.sqrt(Re_f**2 + Im_f**2)
-            
-            # Differential cross section per atom:
-            dsigma = ((r_e**2)/2.0) * ang_factor * (f_eff**2)
-            # Weight by mass fraction and atoms per gram:
-            sigma_eff = conc_df[concentration_key][el_name] * (N_A / param_dict[el_name]["Atomic Mass"]) * dsigma
-            # param_dict[el_name][concentration_key]
-            sigma_coh_sample += sigma_eff
-        else:
-            print(f"Warning: Missing data for element {el_name}. Skipping.")
-    
+        Z_val = param_dict[el_name]["Atomic Number"]
+        A_val = param_dict[el_name]["Atomic Mass"]
+        # ----------xraylib replacements-----------
+        f0_vals = np.array([xraylib.FF_Rayl(Z_val, q) for q in x_values])
+        f1_vals = np.array([xraylib.Fi(Z_val, E) for E in energy_array])
+        f2_vals = np.array([xraylib.Fii(Z_val, E) for E in energy_array])
+        # Simplified compute corrected real and imaginary parts (no f_rel, no fNT) ---
+        # This SHOULD be correct but requires revision #TODO
+        Re_f = f0_vals + f1_vals - Z_val
+        Im_f = f2_vals
+        f_eff = np.sqrt(Re_f ** 2 + Im_f ** 2)
+        # Differential cross section per atom:
+        dsigma = ((r_e ** 2) / 2.0) * ang_factor * (f_eff ** 2)
+        # Weight by mass fraction and atoms per gram:
+        sigma_eff = conc_df[concentration_key][el_name] * (N_A / param_dict[el_name]["Atomic Mass"]) * dsigma
+        # param_dict[el_name][concentration_key]
+        sigma_coh_sample += sigma_eff
+
     # Attenuation denominator:
     geom_factor = np.cos(theta) / np.cos(phi)
     denominator = sample_mass_atten_array * (1.0 + geom_factor)
@@ -246,7 +270,8 @@ def compute_coherent_scattering_sample(
 def compute_k_fluorescence(
     energy_array,
     flux_array,
-    photoelectric_array_element,
+    # photoelectric_array_element,
+    Z, # atomic number
     total_atten_sample_array,
     total_atten_sample_at_line,
     absorption_edge,
@@ -258,12 +283,13 @@ def compute_k_fluorescence(
         return 0.0
     E_sub    = energy_array[mask]
     flux_sub = flux_array[mask]
-    mu_ph    = photoelectric_array_element[mask]
+    # --------------------------------------
+    # ------------NEW VERSION---------------
+    # --------------------------------------
+    mu_ph = np.array([xraylib.CS_Photo(Z, E) for E in E_sub])
+    # mu_ph    = photoelectric_array_element[mask]
     mu_tot_E = total_atten_sample_array[mask]
-    
-    
     geometry_factor = np.cos(theta) / np.cos(phi)
     denom = mu_tot_E + (geometry_factor*total_atten_sample_at_line)
     integrand = np.where(denom > 0.0, flux_sub * mu_ph / denom, 0.0)
-    # return np.trapz(integrand, x=E_sub)
     return np.trapezoid(integrand, x=E_sub)
