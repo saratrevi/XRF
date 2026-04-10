@@ -42,9 +42,9 @@ class ElementProperties:
         for el in cfg["all_matrix_elements"]:
             Z = xraylib.SymbolToAtomicNumber(el)
             pdata = {
-                "f_rel": self.df.at[el, "f_REL"],
+                # "f_rel": self.df.at[el, "f_REL"],
                 # f_rel is the relativistic correction, didnt find it
-                "fNT": self.df.at[el, "f_NT"],
+                # "fNT": self.df.at[el, "f_NT"],
                 # f_NT is the nuclear Thomson scattering correction, didnt find it
                 "Atomic Number": Z,
                 "Atomic Mass": xraylib.AtomicWeight(Z),
@@ -111,11 +111,9 @@ def compute_fluorescence_spectrum(conc,
         param_dict=element_properties.param_dict,
         # form_factor_dict=element_properties.form_factor_dict,
         # full_data_dict=element_properties.full_data_dict,
-        concentration_key=conc,
-        conc_df=conc_df,
+        conc=conc_df[conc],
         scattering_angle=scattering_angle,
-        theta=theta,
-        phi=phi,
+        element_properties=element_properties
     )
 
     fluorescence_rows = []
@@ -139,15 +137,14 @@ def compute_fluorescence_spectrum(conc,
 
         if E_edge > 0 and E_Ka > 0 and P_Ka > 0:
             raw_Ka = compute_k_fluorescence(
-            energy_array=energy_solar_flare,
-            flux_array=flux_scaled,
-            # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
-            Z=params["Atomic Number"],
-            total_atten_sample_array=sample_mass_atten_array,
-            total_atten_sample_at_line=mu_Ka,
-            absorption_edge=E_edge,
-            theta=theta,
-            phi=phi,
+                energy_array=energy_solar_flare,
+                flux_array=flux_scaled,
+                # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
+                element_properties=element_properties,
+                Z=params["Atomic Number"],
+                total_atten_sample_array=sample_mass_atten_array,
+                total_atten_sample_at_line=mu_Ka,
+                absorption_edge=E_edge,
             )
             I_Ka = (raw_Ka * w * wK * R * P_Ka) / (4 * np.pi)
         else:
@@ -172,8 +169,7 @@ def compute_fluorescence_spectrum(conc,
                 total_atten_sample_array=sample_mass_atten_array,
                 total_atten_sample_at_line=mu_Kb,
                 absorption_edge=E_edge,
-                theta=theta,
-                phi=phi,
+                element_properties=element_properties
             )
             I_Kb = (raw_Kb * w * wK * R * P_Kb) / (4 * np.pi)
         else:
@@ -196,11 +192,9 @@ def compute_coherent_scattering_sample(
     param_dict,
     # form_factor_dict,
     # full_data_dict,
-    conc_df,
-    concentration_key,
+    conc,
     scattering_angle,
-    theta,
-    phi
+    element_properties,
 ):
     """
     Computes the corrected coherent (Rayleigh) scattering spectrum as an array.
@@ -240,7 +234,6 @@ def compute_coherent_scattering_sample(
     # --------------------------------------
     for el_name in param_dict:
         Z_val = param_dict[el_name]["Atomic Number"]
-        A_val = param_dict[el_name]["Atomic Mass"]
         # ----------xraylib replacements-----------
         f0_vals = np.array([xraylib.FF_Rayl(Z_val, q) for q in x_values])
         f1_vals = np.array([xraylib.Fi(Z_val, E) for E in energy_array])
@@ -253,15 +246,14 @@ def compute_coherent_scattering_sample(
         # Differential cross section per atom:
         dsigma = ((r_e ** 2) / 2.0) * ang_factor * (f_eff ** 2)
         # Weight by mass fraction and atoms per gram:
-        sigma_eff = conc_df[concentration_key][el_name] * (N_A / param_dict[el_name]["Atomic Mass"]) * dsigma
+        sigma_eff = conc[el_name] * (N_A / param_dict[el_name]["Atomic Mass"]) * dsigma
         # param_dict[el_name][concentration_key]
         sigma_coh_sample += sigma_eff
 
-    # Attenuation denominator:
+    theta = element_properties.cfg["theta"]
+    phi = element_properties.cfg["phi"]
     geom_factor = np.cos(theta) / np.cos(phi)
     denominator = sample_mass_atten_array * (1.0 + geom_factor)
-    
-    # Compute the differential intensity.
     I_coh = flux_array * sigma_coh_sample / denominator
     
     return I_coh
@@ -272,11 +264,10 @@ def compute_k_fluorescence(
     flux_array,
     # photoelectric_array_element,
     Z, # atomic number
+    element_properties,
     total_atten_sample_array,
     total_atten_sample_at_line,
     absorption_edge,
-    theta,
-    phi
 ):
     mask = energy_array >= absorption_edge
     if np.sum(mask) == 0:
@@ -286,9 +277,12 @@ def compute_k_fluorescence(
     # --------------------------------------
     # ------------NEW VERSION---------------
     # --------------------------------------
+
     mu_ph = np.array([xraylib.CS_Photo(Z, E) for E in E_sub])
     # mu_ph    = photoelectric_array_element[mask]
     mu_tot_E = total_atten_sample_array[mask]
+    theta = element_properties.cfg["theta"]
+    phi = element_properties.cfg["phi"]
     geometry_factor = np.cos(theta) / np.cos(phi)
     denom = mu_tot_E + (geometry_factor*total_atten_sample_at_line)
     integrand = np.where(denom > 0.0, flux_sub * mu_ph / denom, 0.0)
