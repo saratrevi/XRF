@@ -75,11 +75,11 @@ class ElementProperties:
 
 
 def compute_fluorescence_spectrum(conc,
-                                  conc_df,
                                   energy_solar_flare,
                                   concentrations : dict[str, float],
                                   element_properties : ElementProperties,
-                                  flux_solar_flare):
+                                  flux_solar_flare,
+                                  debugging=False):
     footprint = element_properties.cfg["footprint"]
     distance_sun_AU = element_properties.cfg["distance_sun_AU"]
 
@@ -100,6 +100,8 @@ def compute_fluorescence_spectrum(conc,
             Z = element_properties.param_dict[el_name]["Atomic Number"]
             mu_vals = np.array([xraylib.CS_Total(Z, E) for E in energy_solar_flare])
             sample_mass_atten_array += w * mu_vals
+            if debugging:
+                print("[concentrations.items()] El_name:", el_name, "W:", w)
 
     scale = (footprint * np.cos(theta)) / (distance_sun_AU ** 2) # NOTE: we'll need to either change this (for now: just move it ealiers)
     flux_scaled = flux_solar_flare * scale * solid_angle
@@ -111,7 +113,7 @@ def compute_fluorescence_spectrum(conc,
         param_dict=element_properties.param_dict,
         # form_factor_dict=element_properties.form_factor_dict,
         # full_data_dict=element_properties.full_data_dict,
-        conc=conc_df[conc],
+        conc=conc,
         scattering_angle=scattering_angle,
         element_properties=element_properties
     )
@@ -121,9 +123,13 @@ def compute_fluorescence_spectrum(conc,
                               bounds_error=False, fill_value="extrapolate")
 
     for el, params in element_properties.param_dict.items():
-        w = conc_df[conc][el]
+        w = conc[el]
+        # TODO
+        # Why does this often not start? What is inside 'fluorescence elements' exactly?
         if w <= 0 or el not in element_properties.cfg["fluorescence_elements"]:
             continue
+        if debugging:
+            print("[conc[el]] El_name:", el, "W:", w)
 
         
         E_edge = float(element_properties.df.at[el, "Absorption Edge"])

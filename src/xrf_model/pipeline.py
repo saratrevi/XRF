@@ -33,7 +33,7 @@ def safe_float(x, default=0.0) -> float:
         return default
 
 
-def run_one(flux_file: str | Path, cfg: dict) -> dict:
+def run_one(flux_file: str | Path, cfg: dict, debugging = False) -> dict:
     flux_file = Path(flux_file)
     flare_name = flux_file.stem
 
@@ -210,13 +210,12 @@ def run_one(flux_file: str | Path, cfg: dict) -> dict:
 
         
         results = compute_fluorescence_spectrum(
-            conc=conc,
-            conc_df=df,
+            conc=df[conc],
             energy_solar_flare=energy_solar_flare,
             concentrations=sample_concentrations,
             element_properties=element_properties,
             flux_solar_flare=flux_solar_flare_0,
-
+            debugging=debugging
         )
 
         # NOTE: output code
