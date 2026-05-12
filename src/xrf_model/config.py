@@ -24,6 +24,22 @@ def load_config(yaml_path: str | Path) -> dict:
         if k in cfg:
             cfg[k] = float(cfg[k])
 
+    # New lab-geometry keys (optional — only present in lab configs)
+    for k in ["src_x", "src_y", "src_z",
+              "det_x", "det_y", "det_z",
+              "det_area",
+              "grid_x_min", "grid_x_max",
+              "grid_y_min", "grid_y_max",
+              "src_reference_distance_cm"]:
+        if k in cfg:
+            cfg[k] = float(cfg[k])
+
+    for k in ["grid_n_x", "grid_n_y"]:
+        if k in cfg:
+            cfg[k] = int(cfg[k])
+
+    # det_normal stays as a list — normalised later in GridGeometry
+
     # Resolve paths
     paths = cfg.get("paths", {})
     cfg["paths"] = {

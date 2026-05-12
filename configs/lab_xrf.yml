@@ -1,0 +1,50 @@
+# configs/lab_xrf.yml
+# XRF instrument configuration — distances in mm
+
+paths:
+  element_data:   data/element_params/Data_keV.xlsx
+  form_factors:   data/form_factors/form_factor_coherent_scatter.xlsx
+  absorption_dir: data/absorption_coeffs
+  output_dir:     results/lab_xrf
+
+concentration_cols: ["CI"]
+
+all_matrix_elements:  ["Na","Mg","Al","Si","P","S","Ca","Cr","Mn","Fe","Ni"]
+fluorescence_elements:["Mg","Al","Si","P","S","Ca","Cr","Mn","Fe"]
+
+# ── Flux spectrum reference ───────────────────────────────────────────────────
+# Distance [cm] at which the tube spectrum was measured (or normalised to).
+# Converts flux_raw [ph/cm²/s/keV] → P_eff = flux_raw × d_ref²
+# so that phi_mn = P_eff × cosΦ / R_mm² is in ph/mm²/s/keV.
+# Adjust to match your flux file.
+src_reference_distance_cm: 1.0
+
+# ── Instrument geometry (mm) ───────────────────────────────────────────────
+# X-ray tube focal spot position
+src_x: -20.0
+src_y:  0.0
+src_z:  20.0      # 20 mm above sample surface, 45° from normal
+
+# SDD detector centre position
+det_x:  20.0
+det_y:  0.0
+det_z:  20.0      # 20 mm above sample surface, 45° from normal
+
+# Detector inward normal (unit vector pointing FROM detector TOWARD sample)
+# Pointed at sample origin, consistent with 45° geometry
+det_normal: [-0.707, 0.0, -0.707]   # will be normalised in code
+
+# Detector active area (mm²)
+det_area: 50.0    # 50 mm² SDD
+
+# ── Grid definition (mm) ──────────────────────────────────────────────────
+# The grid covers the sample region you want to integrate over.
+# Make it large enough to include all illuminated area that the
+# detector can see. Start coarse (10×10) for testing.
+grid_x_min: -1.0
+grid_x_max:  1.0
+grid_n_x:    2
+
+grid_y_min: -1.0
+grid_y_max:  1.0
+grid_n_y:    2

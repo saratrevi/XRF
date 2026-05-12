@@ -1,295 +1,217 @@
 # src/xrf_model/physics.py
 from __future__ import annotations
-from typing import Iterable
 
 import numpy as np
-from scipy.interpolate import interp1d
 import xraylib
-# https://github.com/tschoonj/xraylib
-import pandas as pd
-import os
-from .io import (
-    load_element_mass_absorption_data,
-    interpolate_element_full_data,
-    load_form_factor_data,
-)
 
-# "Total cross section (Photoelectric + Compton + Rayleigh)"
-def _build_absorption_function(Z):
-    # Returns a callable: energy (keV) -> mass absorption coefficient
-    def mu(E):
-        return xraylib.CS_Total(Z, E)  # cm^2/g
-    return mu
 
-# "Atomic form factor for Rayleigh scattering"
-def _build_form_factor_function(Z):
-    # Returns a callable: q (momentum transfer) -> form factor
-    def f(q):
-        return xraylib.FF_Rayl(Z, q)
-    return f
+# ── L-shell line table ────────────────────────────────────────────────────────
+# (display name, xraylib attribute name, originating subshell: 0=L1 1=L2 2=L3)
+def _build_l_lines():
+    _candidates = [
+        ("Lα1",  "LA1_LINE",  2),   # L3 → M5
+        ("Lα2",  "LA2_LINE",  2),   # L3 → M4
+        ("Lβ1",  "LB1_LINE",  1),   # L2 → M4
+        ("Lβ2",  "LB2_LINE",  2),   # L3 → N4,5
+        ("Lβ3",  "LB3_LINE",  0),   # L1 → M2,3
+        ("Lβ4",  "LB4_LINE",  0),   # L1 → M2
+        ("Lβ15", "LB15_LINE", 2),   # L3 → N4
+        ("Lβ17", "LB17_LINE", 1),   # L2 → M3
+        ("Lγ1",  "LG1_LINE",  1),   # L2 → N4
+        ("Lγ2",  "LG2_LINE",  0),   # L1 → N2,3
+        ("Lγ3",  "LG3_LINE",  0),   # L1 → N1
+        ("Ll",   "LL_LINE",   2),   # L3 → M1
+    ]
+    return [
+        (name, getattr(xraylib, attr), idx)
+        for name, attr, idx in _candidates
+        if getattr(xraylib, attr, None) is not None
+    ]
 
+_L_LINES = _build_l_lines()
+
+
+# ── Element properties ────────────────────────────────────────────────────────
 
 class ElementProperties:
-    
+    """Stores per-element atomic numbers/masses (from xraylib) and the run config."""
+
     def __init__(self, cfg: dict):
         self.cfg = cfg
-
-        df = pd.read_excel(cfg["paths"]["element_data"], index_col=0)
-        self.df = df.loc[:, :'mantle_mars'] # NOTE keep only non-concentration columns
-
-        # Retrieve element properties
         self.param_dict = {}
         for el in cfg["all_matrix_elements"]:
             Z = xraylib.SymbolToAtomicNumber(el)
-            pdata = {
-                # "f_rel": self.df.at[el, "f_REL"],
-                # f_rel is the relativistic correction, didnt find it
-                # "fNT": self.df.at[el, "f_NT"],
-                # f_NT is the nuclear Thomson scattering correction, didnt find it
+            self.param_dict[el] = {
                 "Atomic Number": Z,
-                "Atomic Mass": xraylib.AtomicWeight(Z),
-                #"Atomic Number": self.df.at[el, "Atomic Number"],
-                #"Atomic Mass": self.df.at[el, "Atomic Mass"],
+                "Atomic Mass":   xraylib.AtomicWeight(Z),
             }
-            # EDIT: f_REL AND f_NT SHOULD NOT BE NECESSARY ANYMORE
-            self.param_dict[el] = pdata
-
-        # Absorption data
-        # --- Load & interpolate mass absorption data 
-        self.element_xs_data = {}
-        data_dir = self.cfg["paths"]["absorption_dir"]
-        for el in cfg["all_matrix_elements"]:
-            txt_path = os.path.join(data_dir, f"{el}.txt")
-            if not os.path.exists(txt_path):
-                raise FileNotFoundError(f"Missing element file: {txt_path}")
-            self.element_xs_data[el] = load_element_mass_absorption_data(txt_path)
-
-        # Form factor data
-        self.form_factor_dict = load_form_factor_data(cfg["paths"]["form_factors"])
-
-    #def realign(self, common_energy):
-    #    self.full_data_dict = {
-    #        el: interpolate_element_full_data(xs_data, common_energy)
-    #        for el, xs_data in self.element_xs_data.items()
-    #    }
 
 
-def compute_fluorescence_spectrum(conc,
-                                  energy_solar_flare,
-                                  concentrations : dict[str, float],
-                                  element_properties : ElementProperties,
-                                  flux_solar_flare,
-                                  debugging=False):
-    footprint = element_properties.cfg["footprint"]
-    distance_sun_AU = element_properties.cfg["distance_sun_AU"]
-
-    theta = element_properties.cfg["theta"]  # NOTE: incidence angle w.r.t. the normal vector (which is the POV)
-    phi = element_properties.cfg["phi"]  # NOTE: angle of emission w.r.t. the normal vector
-    solid_angle = 1 / (element_properties.cfg["altitude"] ** 2)  # NOTE: we could do everything with this, possibly skipping altitude
-    scattering_angle = np.pi - (theta + phi)
-
-    sample_mass_atten_array = np.zeros_like(energy_solar_flare, dtype=float)
-    # --------------------------------------
-    # ------------NEW VERSION---------------
-    # --------------------------------------
-    for el_name, w in concentrations.items():
-        if w > 0:
-            #sample_mass_atten_array += (
-            #    w * element_properties.full_data_dict[el_name]["total_mass_attenuation_interp"]
-            #)
-            Z = element_properties.param_dict[el_name]["Atomic Number"]
-            mu_vals = np.array([xraylib.CS_Total(Z, E) for E in energy_solar_flare])
-            sample_mass_atten_array += w * mu_vals
-            if debugging:
-                print("[concentrations.items()] El_name:", el_name, "W:", w)
-
-    scale = (footprint * np.cos(theta)) / (distance_sun_AU ** 2) # NOTE: we'll need to either change this (for now: just move it ealiers)
-    flux_scaled = flux_solar_flare * scale * solid_angle
-
-    I_coh = compute_coherent_scattering_sample(
-        energy_array=energy_solar_flare,
-        flux_array=flux_scaled,
-        sample_mass_atten_array=sample_mass_atten_array,
-        param_dict=element_properties.param_dict,
-        # form_factor_dict=element_properties.form_factor_dict,
-        # full_data_dict=element_properties.full_data_dict,
-        conc=conc,
-        scattering_angle=scattering_angle,
-        element_properties=element_properties
-    )
-
-    fluorescence_rows = []
-    f_atten_interp = interp1d(energy_solar_flare, sample_mass_atten_array,
-                              bounds_error=False, fill_value="extrapolate")
-
-    for el, params in element_properties.param_dict.items():
-        w = conc[el]
-        # TODO
-        # Why does this often not start? What is inside 'fluorescence elements' exactly?
-        if w <= 0 or el not in element_properties.cfg["fluorescence_elements"]:
-            continue
-        if debugging:
-            print("[conc[el]] El_name:", el, "W:", w)
-
-        
-        E_edge = float(element_properties.df.at[el, "Absorption Edge"])
-        wK = float(element_properties.df.at[el, "Fluorescence Yield"])
-        R  = float(element_properties.df.at[el, "r-1/r"])
-
-        # --- Kα ---
-        E_Ka = float(element_properties.df.at[el, "K-Alpha Line"])
-        P_Ka = float(element_properties.df.at[el, "P_kalpha"])
-        mu_Ka = float(f_atten_interp(E_Ka))
-
-        if E_edge > 0 and E_Ka > 0 and P_Ka > 0:
-            raw_Ka = compute_k_fluorescence(
-                energy_array=energy_solar_flare,
-                flux_array=flux_scaled,
-                # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
-                element_properties=element_properties,
-                Z=params["Atomic Number"],
-                total_atten_sample_array=sample_mass_atten_array,
-                total_atten_sample_at_line=mu_Ka,
-                absorption_edge=E_edge,
-            )
-            I_Ka = (raw_Ka * w * wK * R * P_Ka) / (4 * np.pi)
-        else:
-            I_Ka = 0.0
-        
-        # NOTE: this is already output code
-        fluorescence_rows.append({
-            "Element": el, "Concentration": w, "Line": "Kα",
-            "E_line_keV": E_Ka, "P_line": P_Ka, "Intensity_ph_cm2_s": I_Ka
-        })
-
-        # --- Kβ (optional if present)
-        E_Kb = float(element_properties.df.at[el, "K-beta Line"])
-        P_Kb = float(element_properties.df.at[el, "P_kbeta"])
-        if E_Kb > 0.0 and P_Kb > 0.0:
-            mu_Kb = float(f_atten_interp(E_Kb))
-            raw_Kb = compute_k_fluorescence(
-                energy_array=energy_solar_flare,
-                flux_array=flux_scaled,
-                # photoelectric_array_element=element_properties.full_data_dict[el]["photoelectric_absorption_interp"],
-                Z=params["Atomic Number"],
-                total_atten_sample_array=sample_mass_atten_array,
-                total_atten_sample_at_line=mu_Kb,
-                absorption_edge=E_edge,
-                element_properties=element_properties
-            )
-            I_Kb = (raw_Kb * w * wK * R * P_Kb) / (4 * np.pi)
-        else:
-            I_Kb = 0.0
-
-        # NOTE: output code
-        fluorescence_rows.append({
-            "Element": el, "Concentration": w, "Line": "Kβ",
-            "E_line_keV": E_Kb if E_Kb > 0 else np.nan,
-            "P_line": P_Kb, "Intensity_ph_cm2_s": I_Kb
-        })
-
-        return {"rows": fluorescence_rows, "icoh": I_coh}
-
-
-def compute_coherent_scattering_sample(
-    energy_array,
-    flux_array,
-    sample_mass_atten_array,
-    param_dict,
-    # form_factor_dict,
-    # full_data_dict,
-    conc,
-    scattering_angle,
-    element_properties,
-):
-    """
-    Computes the corrected coherent (Rayleigh) scattering spectrum as an array.
-    
-    For each element i, the effective form factor is computed as:
-         Re(f) = f₀(x) + f₁(x) + f_rel - Z + f_NT,
-         Im(f) = f₂(x),
-         f_eff = sqrt[Re(f)² + Im(f)²],
-    where x = sin(scattering_angle/2)*E (with E in keV).
-    
-    The differential cross section per atom is then:
-         dσ/dΩ = r_e² * [1 + cos²(scattering_angle)] * [f_eff]².
-    Each element's contribution is weighted by:
-         w_i * (N_A / A_i),
-    and the sample's overall cross section is the sum over elements.
-    
-    Finally, the coherent scattering intensity is computed as:
-         I_coh(E) = [ flux(E) * σ_coh_sample(E) ] / { sample_mass_attenuation(E) * [1 + (cos_theta/cos_phi)] },
-    and then multiplied by (solid_angle / (4π)) to obtain the detected intensity.
-    
-    Returns:
-         I_coh as a numpy array (same shape as energy_array).
-    """
-    # Physical constants
-    r_e = 2.818e-13  # cm
-    N_A = 6.022e23   # atoms/mol
-    ang_factor = 1.0 + np.cos(scattering_angle)**2
-
-    # Compute x = sin(scattering_angle/2)*E, with E in keV.
-    x_values = np.sin(scattering_angle / 2.0) * energy_array
-
-    # Initialize the sample's coherent cross section array.
-    sigma_coh_sample = np.zeros_like(energy_array)
-
-    # --------------------------------------
-    # ------------NEW VERSION---------------
-    # --------------------------------------
-    for el_name in param_dict:
-        Z_val = param_dict[el_name]["Atomic Number"]
-        # ----------xraylib replacements-----------
-        f0_vals = np.array([xraylib.FF_Rayl(Z_val, q) for q in x_values])
-        f1_vals = np.array([xraylib.Fi(Z_val, E) for E in energy_array])
-        f2_vals = np.array([xraylib.Fii(Z_val, E) for E in energy_array])
-        # Simplified compute corrected real and imaginary parts (no f_rel, no fNT) ---
-        # This SHOULD be correct but requires revision #TODO
-        Re_f = f0_vals + f1_vals - Z_val
-        Im_f = f2_vals
-        f_eff = np.sqrt(Re_f ** 2 + Im_f ** 2)
-        # Differential cross section per atom:
-        dsigma = ((r_e ** 2) / 2.0) * ang_factor * (f_eff ** 2)
-        # Weight by mass fraction and atoms per gram:
-        sigma_eff = conc[el_name] * (N_A / param_dict[el_name]["Atomic Mass"]) * dsigma
-        # param_dict[el_name][concentration_key]
-        sigma_coh_sample += sigma_eff
-
-    theta = element_properties.cfg["theta"]
-    phi = element_properties.cfg["phi"]
-    geom_factor = np.cos(theta) / np.cos(phi)
-    denominator = sample_mass_atten_array * (1.0 + geom_factor)
-    I_coh = flux_array * sigma_coh_sample / denominator
-    
-    return I_coh
-
+# ── Fluorescence integrals ────────────────────────────────────────────────────
 
 def compute_k_fluorescence(
     energy_array,
     flux_array,
-    # photoelectric_array_element,
-    Z, # atomic number
-    element_properties,
+    Z,
+    cos_theta,
+    cos_phi,
     total_atten_sample_array,
     total_atten_sample_at_line,
     absorption_edge,
 ):
-    mask = energy_array >= absorption_edge
-    if np.sum(mask) == 0:
-        return 0.0
-    E_sub    = energy_array[mask]
-    flux_sub = flux_array[mask]
-    # --------------------------------------
-    # ------------NEW VERSION---------------
-    # --------------------------------------
+    """
+    Raw excitation integral for K-shell fluorescence at a single grid cell.
 
-    mu_ph = np.array([xraylib.CS_Photo(Z, E) for E in E_sub])
-    # mu_ph    = photoelectric_array_element[mask]
-    mu_tot_E = total_atten_sample_array[mask]
-    theta = element_properties.cfg["theta"]
-    phi = element_properties.cfg["phi"]
-    geometry_factor = np.cos(theta) / np.cos(phi)
-    denom = mu_tot_E + (geometry_factor*total_atten_sample_at_line)
+    Returns
+        ∫_{E_edge}  φ(E) · μ_ph(Z,E) / [μ(E) + (cosθ/cosφ) · μ_line]  dE
+
+    flux_array must already contain the cosθ factor (φ = P·cosθ/R²), so that
+    the denominator recovers μ(E)/sinΦ + μ_line/sinΨ after cancellation.
+
+    cos_theta, cos_phi : per-cell sinΦ and sinΨ from GridGeometry — required,
+                         no cfg fallback.
+    """
+    mask = energy_array >= absorption_edge
+    if not mask.any():
+        return 0.0
+    E_sub     = energy_array[mask]
+    flux_sub  = flux_array[mask]
+    mu_ph     = np.array([xraylib.CS_Photo(Z, E) for E in E_sub])
+    mu_tot_E  = total_atten_sample_array[mask]
+    denom     = mu_tot_E + (cos_theta / cos_phi) * total_atten_sample_at_line
     integrand = np.where(denom > 0.0, flux_sub * mu_ph / denom, 0.0)
     return np.trapezoid(integrand, x=E_sub)
+
+
+def compute_l_fluorescence(
+    energy_array,
+    flux_array,
+    Z,
+    cos_theta,
+    cos_phi,
+    total_atten_sample_array,
+    f_atten_interp,
+):
+    """
+    L-shell fluorescence with Coster-Kronig vacancy-cascade corrections.
+
+    cos_theta, cos_phi : per-cell values — required, no cfg fallback.
+
+    Returns a list of dicts — one per L line with E_line > 0 and rad_rate > 0:
+        line_name, E_line, rad_rate, I_raw
+    I_raw = ω_Li · N_Li_eff · RadRate / (4π).  Caller multiplies by concentration w.
+
+    Cascade equations
+    -----------------
+    N_L1 = ∫ φ · σ_L1(E) / denom dE
+    N_L2 = ∫ φ · σ_L2(E) / denom dE  +  f12 · N_L1
+    N_L3 = ∫ φ · σ_L3(E) / denom dE  +  f23 · N_L2  +  f13 · N_L1
+
+    xraylib calls: CS_Photo_Partial, FluorYield, CosKronTransProb, RadRate, LineEnergy.
+    """
+    geom = cos_theta / cos_phi
+
+    def _safe(fn, *args):
+        try:
+            v = fn(*args)
+            return float(v) if np.isfinite(v) else 0.0
+        except Exception:
+            return 0.0
+
+    f12 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL12_TRANS)
+    f13 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL13_TRANS)
+    f23 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL23_TRANS)
+
+    omega_L = [
+        _safe(xraylib.FluorYield, Z, xraylib.L1_SHELL),
+        _safe(xraylib.FluorYield, Z, xraylib.L2_SHELL),
+        _safe(xraylib.FluorYield, Z, xraylib.L3_SHELL),
+    ]
+
+    # Partial photoionisation arrays — depend on Z and E only, not on cell geometry.
+    sigma_L = [
+        np.array([_safe(xraylib.CS_Photo_Partial, Z, sh, E) for E in energy_array])
+        for sh in [xraylib.L1_SHELL, xraylib.L2_SHELL, xraylib.L3_SHELL]
+    ]
+
+    rows = []
+    for line_name, line_const, shell_idx in _L_LINES:
+        E_line   = _safe(xraylib.LineEnergy, Z, line_const)
+        rad_rate = _safe(xraylib.RadRate,    Z, line_const)
+        if E_line <= 0.0 or rad_rate <= 0.0:
+            continue
+
+        denom = total_atten_sample_array + geom * float(f_atten_interp(E_line))
+        raw_L = [
+            np.trapezoid(
+                np.where(denom > 0.0, flux_array * sigma / denom, 0.0),
+                x=energy_array,
+            )
+            for sigma in sigma_L
+        ]
+
+        N_L1 = raw_L[0]
+        N_L2 = raw_L[1] + f12 * N_L1
+        N_L3 = raw_L[2] + f23 * N_L2 + f13 * N_L1
+        N_eff = [N_L1, N_L2, N_L3]
+
+        I_raw = omega_L[shell_idx] * N_eff[shell_idx] * rad_rate / (4.0 * np.pi)
+        rows.append({
+            "line_name": line_name,
+            "E_line":    E_line,
+            "rad_rate":  rad_rate,
+            "I_raw":     I_raw,
+        })
+
+    return rows
+
+
+# ── Coherent (Rayleigh) scattering ────────────────────────────────────────────
+
+def precompute_anomalous_factors(energy_array, param_dict):
+    """Precompute f1, f2 anomalous scattering factors for all elements.
+
+    These depend only on energy, not on scattering angle or cell position, so
+    they are computed once per run and reused across all grid cells.
+
+    Returns a dict: {el_name: {"f1": array, "f2": array}}
+    """
+    cache = {}
+    for el_name, params in param_dict.items():
+        Z = params["Atomic Number"]
+        cache[el_name] = {
+            "f1": np.array([xraylib.Fi(Z, E)  for E in energy_array]),
+            "f2": np.array([xraylib.Fii(Z, E) for E in energy_array]),
+        }
+    return cache
+
+
+def compute_coherent_cross_section(energy_array, scattering_angle, param_dict, conc,
+                                   anomalous_cache=None):
+    """
+    Coherent (Rayleigh) scattering cross section of the sample mixture [cm²/g].
+
+    anomalous_cache: output of precompute_anomalous_factors — pass it from the
+                     grid loop to avoid recomputing f1/f2 per cell.
+    """
+    r_e = 2.818e-13   # cm
+    N_A = 6.022e23
+    ang_factor = 1.0 + np.cos(scattering_angle) ** 2
+    # FF_Rayl expects sin(θ/2)·E[keV] / 12.398  [Å⁻¹]
+    x_angstrom = np.sin(scattering_angle / 2.0) * energy_array / 12.398
+
+    sigma_coh = np.zeros_like(energy_array, dtype=float)
+    for el_name, params in param_dict.items():
+        Z_val = params["Atomic Number"]
+        f0 = np.array([xraylib.FF_Rayl(Z_val, q) for q in x_angstrom])
+        if anomalous_cache is not None:
+            f1 = anomalous_cache[el_name]["f1"]
+            f2 = anomalous_cache[el_name]["f2"]
+        else:
+            f1 = np.array([xraylib.Fi(Z_val, E)  for E in energy_array])
+            f2 = np.array([xraylib.Fii(Z_val, E) for E in energy_array])
+        f_eff = np.sqrt((f0 + f1 - Z_val) ** 2 + f2 ** 2)
+        dsigma = (r_e ** 2 / 2.0) * ang_factor * f_eff ** 2
+        sigma_coh += conc[el_name] * (N_A / params["Atomic Mass"]) * dsigma
+
+    return sigma_coh
