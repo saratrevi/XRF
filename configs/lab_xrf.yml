@@ -1,5 +1,5 @@
 # configs/lab_xrf.yml
-# XRF instrument configuration — distances in mm
+# XRF instrument configuration — all distances in cm
 
 paths:
   element_data:   data/element_params/Data_keV.xlsx
@@ -7,44 +7,54 @@ paths:
   absorption_dir: data/absorption_coeffs
   output_dir:     results/lab_xrf
 
-concentration_cols: ["CI"]
+concentration_cols: ["soil_14163"]
 
-all_matrix_elements:  ["Na","Mg","Al","Si","P","S","Ca","Cr","Mn","Fe","Ni"]
-fluorescence_elements:["Mg","Al","Si","P","S","Ca","Cr","Mn","Fe"]
+# Include secondary (inter-element) K fluorescence enhancement.
+# true → Intensity_ph_s = primary + secondary (matches fisx secondary=2 minus tertiary)
+# false → primary only (Shiraiwa integral, original behaviour)
+include_secondary: true
 
 # ── Flux spectrum reference ───────────────────────────────────────────────────
-# Distance [cm] at which the tube spectrum was measured (or normalised to).
-# Converts flux_raw [ph/cm²/s/keV] → P_eff = flux_raw × d_ref²
-# so that phi_mn = P_eff × cosΦ / R_mm² is in ph/mm²/s/keV.
-# Adjust to match your flux file.
-src_reference_distance_cm: 1.0
+# flux_units: ph_per_cm2_per_s_per_keV → P_eff = flux_raw × d_ref² [ph/s/keV]
+# src_reference_distance_cm: SpekPy z_cm evaluation distance
+src_reference_distance_cm: 0.56
+flux_units: ph_per_cm2_per_s_per_keV   # options: ph_per_cm2_per_s_per_keV | ph_per_s_per_keV
 
-# ── Instrument geometry (mm) ───────────────────────────────────────────────
+# ── Instrument geometry (cm) ───────────────────────────────────────────────
 # X-ray tube focal spot position
-src_x: -20.0
+# 30° from surface normal, 3 cm vertical height → x = -3·tan(30°) = -3/√3
+src_x: -3.0
 src_y:  0.0
-src_z:  20.0      # 20 mm above sample surface, 45° from normal
+src_z:  3.0       # 3 cm above sample surface, 30° from normal
 
 # SDD detector centre position
-det_x:  20.0
+# 45° from surface normal, 3 cm vertical height → x = 3·tan(45°) = 3 cm
+# source-to-detector distance = 1.7321 + 3.0 = 4.7321 cm
+det_x:  3.0
 det_y:  0.0
-det_z:  20.0      # 20 mm above sample surface, 45° from normal
+det_z:  3.0       # 3 cm above sample surface, 45° from normal
 
 # Detector inward normal (unit vector pointing FROM detector TOWARD sample)
 # Pointed at sample origin, consistent with 45° geometry
 det_normal: [-0.707, 0.0, -0.707]   # will be normalised in code
 
-# Detector active area (mm²)
-det_area: 50.0    # 50 mm² SDD
+# Detector active area (cm²)
+det_area: 0.17    # 50 mm² = 0.50 cm² SDD
 
-# ── Grid definition (mm) ──────────────────────────────────────────────────
+# ── Grid definition (cm) ──────────────────────────────────────────────────
 # The grid covers the sample region you want to integrate over.
 # Make it large enough to include all illuminated area that the
 # detector can see. Start coarse (10×10) for testing.
-grid_x_min: -1.0
-grid_x_max:  1.0
+grid_x_min: -0.4
+grid_x_max:  0.4
 grid_n_x:    2
 
-grid_y_min: -1.0
-grid_y_max:  1.0
+grid_y_min: -0.4
+grid_y_max:  0.4
 grid_n_y:    2
+
+# ── Detector response ────────────────────────────────────────────────────────
+be_window_mm:           0.125   # Be entrance window thickness [mm]
+si_active_layer_um:     450.0   # Active Si crystal thickness [µm] — sets high-E quantum efficiency
+detector_fano:          0.115   # Fano factor for silicon (fixed)
+detector_enc_electrons: 8.0     # Electronic noise [electrons equivalent] — adjust by calibration
