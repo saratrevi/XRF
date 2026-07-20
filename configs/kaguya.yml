@@ -6,8 +6,6 @@ paths:
 
 concentration_cols: ["A16"]
 
-all_matrix_elements: ["N","O","Na","Mg","Al","Si","P","S","Cl","K","Ca","Ti","Cr","Mn","Fe","Ni"]
-fluorescence_elements: ["Mg","Al","Si","P","S","K","Ca","Ti","Cr","Mn","Fe"]
 
 theta: 0.0
 phi: 0.0

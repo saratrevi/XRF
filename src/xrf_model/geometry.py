@@ -10,14 +10,12 @@ class GridGeometry:
     Coordinate system
     -----------------
     Sample surface = Z = 0 plane.  Z axis points upward (away from sample).
-    All distances in mm.
+    All distances in cm.
 
-    Angle convention — same as existing physics.py
-    -----------------------------------------------
-    theta_local = incidence angle FROM the surface normal
-                  cos(theta_local) = z_src / R_src_mn  = sinΦ_mn in Shiraiwa
-    phi_local   = emission angle FROM the surface normal
-                  cos(phi_local)  = z_det / R_det_mn  = sinΨ_mn in Shiraiwa
+    Angle convention (Shiraiwa-Fujino)
+    -----------------------------------
+    sinΦ = z_src / R_src  (incidence: elevation angle from sample surface)
+    sinΨ = z_det / R_det  (emission:  elevation angle from sample surface)
     """
 
     def __init__(self, cfg: dict):
@@ -28,7 +26,7 @@ class GridGeometry:
         self.n_det = n / np.linalg.norm(n)
 
         self.det_area = float(cfg["det_area"])
-        self.r_det_radius = np.sqrt(self.det_area / np.pi)   # equivalent circular radius (mm)
+        self.r_det_radius = np.sqrt(self.det_area / np.pi)   # equivalent circular radius (cm)
 
         # Build 2D grid over sample surface.
         # For n=1: place the single point at the grid centre and assign the full
@@ -49,16 +47,16 @@ class GridGeometry:
             dy = cfg["grid_y_max"] - cfg["grid_y_min"]
 
         self.XX, self.YY = np.meshgrid(xs, ys)   # shape (n_y, n_x)
-        self.dS = dx * dy                         # mm² per cell
+        self.dS = dx * dy                         # cm² per cell
 
     def compute_local_geometry(self):
         """
         Returns per-grid-point arrays (shape n_y × n_x):
 
-        cos_theta : cos(incidence angle from normal)  = sinΦ in Shiraiwa
-        cos_phi   : cos(emission angle from normal)   = sinΨ in Shiraiwa
-        R_src     : source-to-point distance (mm)
-        R_det     : point-to-detector distance (mm)
+        sinPhi    : sinΦ = z_src/R_src  (incidence angle from surface normal)
+        sinPsi    : sinΨ = z_det/R_det  (emission angle from surface normal)
+        R_src     : source-to-point distance (cm)
+        R_det     : point-to-detector distance (cm)
         Omega     : exact solid angle of detector (sr), using 2π(1−cosα)
         valid     : bool — True where point can be seen by both source and detector
         """
@@ -67,14 +65,14 @@ class GridGeometry:
         dy_s = self.r_src[1] - self.YY
         dz_s = self.r_src[2]              # z_src > 0 means source above surface
         R_src = np.sqrt(dx_s**2 + dy_s**2 + dz_s**2)
-        cos_theta = dz_s / R_src          # sinΦ_mn
+        sinPhi = dz_s / R_src
 
         # Detector vectors
         dx_d = self.r_det[0] - self.XX
         dy_d = self.r_det[1] - self.YY
         dz_d = self.r_det[2]
         R_det = np.sqrt(dx_d**2 + dy_d**2 + dz_d**2)
-        cos_phi = dz_d / R_det            # sinΨ_mn
+        sinPsi = dz_d / R_det
 
         # Tilt correction: det_normal points FROM detector TOWARD sample,
         # so sample→detector direction is antiparallel to it.
@@ -89,6 +87,6 @@ class GridGeometry:
         Omega = 2.0 * np.pi * (1.0 - np.cos(alpha)) * cos_det   # steradians
 
         # Valid: source above surface, detector above surface, sample visible to detector face
-        valid = (cos_theta > 1e-6) & (cos_phi > 1e-6) & (cos_det > 1e-6)
+        valid = (sinPhi > 1e-6) & (sinPsi > 1e-6) & (cos_det > 1e-6)
 
-        return cos_theta, cos_phi, R_src, R_det, Omega, valid
+        return sinPhi, sinPsi, R_src, R_det, Omega, valid
