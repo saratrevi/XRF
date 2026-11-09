@@ -350,7 +350,9 @@ def compute_coherent_cross_section(energy_array, scattering_angle, param_dict, c
         else:
             f1 = np.array([xraylib.Fi(Z_val, E)  for E in energy_array])
             f2 = np.array([xraylib.Fii(Z_val, E) for E in energy_array])
-        f_eff = np.sqrt((f0 + f1 - Z_val) ** 2 + f2 ** 2)
+        # xraylib.Fi is the anomalous correction f' itself (not FFAST's f1 = Z + f'),
+        # so the amplitude is f0 + f' + i*f'' with no -Z term.
+        f_eff = np.sqrt((f0 + f1) ** 2 + f2 ** 2)
         dsigma = (r_e ** 2 / 2.0) * ang_factor * f_eff ** 2
         sigma_coh += w * (N_A / params["Atomic Mass"]) * dsigma
 
