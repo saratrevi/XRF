@@ -28,23 +28,12 @@ class GridGeometry:
         self.det_area = float(cfg["det_area"])
         self.r_det_radius = np.sqrt(self.det_area / np.pi)   # equivalent circular radius (cm)
 
-        # Build 2D grid over sample surface.
-        # For n=1: place the single point at the grid centre and assign the full
-        # range as dS — linspace with n=1 returns x_min (a corner), which is
-        # geometrically wrong for a symmetric instrument.
-        if cfg["grid_n_x"] > 1:
-            xs = np.linspace(cfg["grid_x_min"], cfg["grid_x_max"], cfg["grid_n_x"])
-            dx = xs[1] - xs[0]
-        else:
-            xs = np.array([(cfg["grid_x_min"] + cfg["grid_x_max"]) / 2.0])
-            dx = cfg["grid_x_max"] - cfg["grid_x_min"]
-
-        if cfg["grid_n_y"] > 1:
-            ys = np.linspace(cfg["grid_y_min"], cfg["grid_y_max"], cfg["grid_n_y"])
-            dy = ys[1] - ys[0]
-        else:
-            ys = np.array([(cfg["grid_y_min"] + cfg["grid_y_max"]) / 2.0])
-            dy = cfg["grid_y_max"] - cfg["grid_y_min"]
+        # Build 2D grid over sample surface: n equal cells with one point at each
+        # centre, so the total area is exact for any n.
+        dx = (cfg["grid_x_max"] - cfg["grid_x_min"]) / cfg["grid_n_x"]
+        dy = (cfg["grid_y_max"] - cfg["grid_y_min"]) / cfg["grid_n_y"]
+        xs = cfg["grid_x_min"] + (np.arange(cfg["grid_n_x"]) + 0.5) * dx
+        ys = cfg["grid_y_min"] + (np.arange(cfg["grid_n_y"]) + 0.5) * dy
 
         self.XX, self.YY = np.meshgrid(xs, ys)   # shape (n_y, n_x)
         self.dS = dx * dy                         # cm² per cell
