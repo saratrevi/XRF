@@ -4,3 +4,4 @@ scipy
 matplotlib
 openpyxl
 pyyaml
+xraylib>=4.2.1
