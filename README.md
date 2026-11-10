@@ -16,7 +16,8 @@ can be opened directly in **PyMCA**.
 - **L-shell fluorescence** (all L lines with non-zero radiative rate)
 - **Coherent (Rayleigh) scattering** using anomalous form factors
 - **Incoherent (Compton) scattering** via Klein–Nishina × incoherent scatter
-  function, with the correct energy shift and Jacobian
+  function, Doppler-broadened with the sample's shell Compton profiles
+  (impulse approximation, binding-energy cutoffs)
 - **Detector response** — Be entrance-window transmission, active-Si quantum
   efficiency, and Fano + electronic-noise Gaussian broadening (SDD)
 - **Geometry** — a 2D grid over the sample surface, with per-point source/detector

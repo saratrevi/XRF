@@ -25,6 +25,7 @@ from .geometry import GridGeometry
 from .tube import tube_source_term
 from .atmosphere import attenuation_coefficient
 from .detector_response import load_response, build_spectrum_with_response
+from .compton import bin_edges, compton_kernel, sample_profile
 
 
 def _k_group(Z: int, line_attr_names: list) -> tuple:
@@ -204,6 +205,9 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     # f1/f2 depend only on energy — precompute once, reuse across all cells
     anomalous_cache = precompute_anomalous_factors(energy_kev,
                                                    element_properties.param_dict)
+    # Compton: incident bin widths and output bin edges on the same grid
+    dE_in = np.gradient(energy_kev)
+    out_edges = bin_edges(energy_kev)
     results_dict = {}
 
     for conc in conc_cols:
@@ -224,6 +228,9 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
         f_mu_interp = interp1d(energy_kev, sample_mu,
                                bounds_error=False, fill_value="extrapolate")
+
+        # Compton profile of this sample (shape of the Doppler broadening)
+        compton_profile = sample_profile(element_properties.param_dict, sample_conc)
 
         # ── Secondary-fluorescence exciter tables (per sample) ─────────────────
         # For each analyte A, the list of B-lines (B ≠ A, present in this sample)
@@ -321,36 +328,24 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     denom_coh > 0, phi_mn * sigma_coh / denom_coh, 0.0)
 
                 # ── Incoherent (Compton) scattering ───────────────────────────
-                # Scattered photon energy for each incident energy bin [keV].
-                # Compton formula: E' = E / (1 + (E/511)(1 - cos θ))
-                E_compton = energy_kev / (
-                    1.0 + (energy_kev / 511.0) * (1.0 - np.cos(psi))
-                )
-                # Differential cross section: Klein-Nishina × S(x,Z) [cm²/g/sr]
+                # Total per incident energy: Klein-Nishina × S(x,Z) [cm²/g/sr]
                 # Ref: Hubbell et al. (1975), J. Phys. Chem. Ref. Data 4, 471.
                 sigma_incoh = compute_incoherent_cross_section(
                     energy_kev, psi, element_properties.param_dict, sample_conc
                 )
+                # Photons per incident bin [ph/s], before attenuation in the sample
+                rate_in = coh_factor * phi_mn * sigma_incoh * dE_in
+                # Doppler-broadened spread over the scattered energy E' (the
+                # output grid): kernel[i, j] [1/keV] from the sample's Compton
+                # profile, impulse approximation with binding cutoffs.
+                kernel = compton_kernel(compton_profile, energy_kev, out_edges, psi)
                 # Attenuation: incident beam at E, scattered beam at E'.
-                # Separate μ values because E ≠ E' (unlike Rayleigh).
                 # Ref: Tee et al. (2025), X-Ray Spectrometry 54, 133.
-                mu_compton  = f_mu_interp(E_compton)
-                denom_incoh = sample_mu + (sinPhi / sinPsi) * mu_compton
-                # Raw spectral density [ph/s/keV] at incident energy E_i.
-                incoh_raw = coh_factor * np.where(
-                    denom_incoh > 0, phi_mn * sigma_incoh / denom_incoh, 0.0
-                )
-                # Jacobian |dE/dE'| = (E/E')²: converts the density from
-                # incident-energy coordinates to scattered-energy coordinates.
-                jacobian = (energy_kev / E_compton) ** 2
-                incoh_at_scattered = incoh_raw * jacobian
-                # Redistribute onto the output energy grid using the
-                # (monotone) mapping E_i → E'_i via linear interpolation.
+                denom_incoh = (sample_mu[:, None]
+                               + (sinPhi / sinPsi) * sample_mu[None, :])
                 # The output grid is the scattered energy, so T_out applies there.
-                I_incoh_total += T_out * np.interp(
-                    energy_kev, E_compton, incoh_at_scattered,
-                    left=0.0, right=0.0,
-                )
+                I_incoh_total += T_out * (rate_in[:, None] * kernel
+                                          / denom_incoh).sum(axis=0)
 
                 # ── K + L fluorescence ────────────────────────────────────────
                 for el, kp in k_params.items():
