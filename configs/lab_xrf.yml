@@ -69,9 +69,16 @@ src_vacuum_path_cm: 0.0
 det_vacuum_path_cm: 0.0
 
 # ── Grid definition (cm) ──────────────────────────────────────────────────
-# The code has no beam-footprint model yet (review problem 6), so the grid
-# IS the illuminated area: set it to the beam spot on the sample
-# (e.g. a 0.8 × 0.8 cm spot → min −0.4, max 0.4).
+# The code has no beam-footprint model, so the grid IS the illuminated area,
+# lit uniformly: set it to the beam spot on the sample.
+# A round beam of diameter D hitting the surface at θ from the normal makes
+# an ellipse D/cos θ long in x and D wide in y. A grid with the same area
+# and shape:
+#   grid_x_max = −grid_x_min = 0.443 · D / cos θ
+#   grid_y_max = −grid_y_min = 0.443 · D          (0.443 = √π / 4)
+# For a collimator bore of diameter d and length L, with its exit at distance
+# g from the spot along the beam, D lies between d and d · (1 + g/L),
+# whatever the distance from the focal spot to the collimator.
 # 2×2 points is within 0.25% of a fine grid for a ±0.4 cm grid at 45°;
 # check against a finer grid when the geometry changes.
 grid_x_min: -0.4
