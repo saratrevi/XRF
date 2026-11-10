@@ -81,12 +81,18 @@ notebooks/
 src/xrf_model/
   config.py              load_config, repo-root resolution
   io.py                  flux / attenuation / form-factor loaders
+  tube.py                X-ray tube spectrum generated with SpekPy
   geometry.py            GridGeometry — surface grid, angles, solid angle
+  atmosphere.py          air absorption between tube, sample and detector
   physics.py             cross-sections, K/L primary & secondary fluorescence
-  spectrum.py            build_spectrum — detector response (Be, QE, Fano/ENC)
+  compton.py             Doppler broadening of Compton scattering
+  spectrum.py            build_spectrum — Gaussian detector response (Be, QE, Fano + noise)
+  detector_response.py   detector response from a Monte Carlo matrix
+  energy_grid.py         bin edges and count-conserving rebinning
   plot_spectrum.py       spectrum plotting
-  output.py              save_mca, ASCII/coherent exports
+  output.py              save_mca (PyMca calibrations), ASCII/coherent exports
   pipeline.py            run_one_grid — orchestrates the whole run
+tests/                   pytest suite (see Tests)
 results/                 outputs (git-ignored)
 ```
 
@@ -140,6 +146,31 @@ python -c "from xrf_model.config import load_config; \
 from xrf_model.pipeline import run_one_grid; \
 run_one_grid(None, load_config('configs/lab_xrf.yml'))"
 ```
+
+## Tests
+
+From the repo folder (pytest is in the `dev` dependency group; with pip,
+`pip install pytest`):
+
+```bash
+pytest
+```
+
+The suite takes about 20 s and uses only files in the repo, not the local
+response matrix or MCA calibration. Most tests compare the code with something
+independent of it: xraylib's own functions, NIST tables, exact results, the
+shipped tube file, or synthetic detector matrices with a known answer.
+
+| File | Checks |
+|------|--------|
+| `test_rayleigh.py` | Rayleigh amplitude against xraylib `DCS_Rayl` |
+| `test_geometry.py` | grid cells add up to the configured area |
+| `test_tube.py` | SpekPy tube spectrum, choice of source |
+| `test_atmosphere.py` | air absorption on both paths |
+| `test_detector_response.py` | response-matrix folding and broadening |
+| `test_efficiency.py` | interactions counted by the Si efficiency |
+| `test_compton.py` | Doppler broadening of Compton scattering |
+| `test_output.py` | `.mca` channels and calibration |
 
 ## Notebook
 

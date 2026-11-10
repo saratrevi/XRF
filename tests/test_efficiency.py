@@ -38,9 +38,10 @@ def test_gaussian_peak_holds_only_the_photoabsorbed_photons():
     line = pd.DataFrame({"E_line_keV": [22.0], "Intensity_ph_s": [100.0]})
     S = build_spectrum(grid, np.zeros_like(grid), line,
                        be_mm=BE_MM, si_active_um=D_UM, **BROADENING)
-    e = np.array([22.0])
-    expected = 100.0 * transmission_be(e, BE_MM)[0] * qe_active_si(e, D_UM)[0]
-    assert np.trapezoid(S, grid) == pytest.approx(expected, rel=1e-4)
+    # expected value from xraylib directly, not from the functions under test
+    window = np.exp(-xraylib.CS_Total(4, 22.0) * 1.848 * BE_MM / 10.0)
+    photoabsorbed = beer(xraylib.CS_Photo(14, 22.0))
+    assert np.trapezoid(S, grid) == pytest.approx(100.0 * window * photoabsorbed, rel=1e-4)
 
 
 def test_matrix_path_counts_compton_events_too(tmp_path):

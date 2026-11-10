@@ -28,5 +28,10 @@ package-mode = false
 
 [dependency-groups]
 dev = [
-    "notebook (>=7.5.5,<8.0.0)"
+    "notebook (>=7.5.5,<8.0.0)",
+    "pytest (>=9.1,<10.0)"
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
