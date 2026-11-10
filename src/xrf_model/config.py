@@ -30,7 +30,8 @@ def load_config(yaml_path: str | Path) -> dict:
               "det_area",
               "grid_x_min", "grid_x_max",
               "grid_y_min", "grid_y_max",
-              "src_reference_distance_cm"]:
+              "src_reference_distance_cm",
+              "src_vacuum_path_cm", "det_vacuum_path_cm"]:
         if k in cfg:
             cfg[k] = float(cfg[k])
 

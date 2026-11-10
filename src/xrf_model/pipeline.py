@@ -23,6 +23,7 @@ from .physics import (
 )
 from .geometry import GridGeometry
 from .tube import tube_source_term
+from .atmosphere import attenuation_coefficient
 
 
 def _k_group(Z: int, line_attr_names: list) -> tuple:
@@ -59,6 +60,15 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
     where φ(E, r_mn) = P(E) · sinΦ_mn / R_src_mn², with R_src_mn the
     straight-line distance from the focal spot to the point (not the height).
+
+    Atmosphere
+    ----------
+    With atmosphere = air, the incoming spectrum is multiplied by
+    exp(−μ_air(E) · L_in) and every outgoing photon by exp(−μ_air(E_out) · L_out),
+    at its own energy (line energy, Rayleigh E, Compton E').  L_in and L_out
+    are the path lengths outside the housings: R_src − src_vacuum_path_cm and
+    R_det − det_vacuum_path_cm.  With atmosphere = vacuum (default) nothing is
+    absorbed.
 
     Source spectrum
     ---------------
@@ -169,6 +179,16 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     print(f"Grid: {cfg['grid_n_x']} × {cfg['grid_n_y']}  "
           f"({cfg['grid_n_x'] * cfg['grid_n_y']} points, {n_valid} valid)")
 
+    # ── Atmosphere between tube, sample and detector ──────────────────────────
+    mu_air = attenuation_coefficient(cfg.get("atmosphere", "vacuum"))   # 1/cm
+    mu_air_grid = mu_air(energy_kev)
+    src_vacuum = float(cfg.get("src_vacuum_path_cm", 0.0))
+    det_vacuum = float(cfg.get("det_vacuum_path_cm", 0.0))
+    for kp in k_params.values():
+        # E = 0 means the line does not exist for this element (e.g. Kβ of O)
+        kp["mu_air_Ka"] = float(mu_air(kp["E_Ka"])) if kp["E_Ka"] > 0 else 0.0
+        kp["mu_air_Kb"] = float(mu_air(kp["E_Kb"])) if kp["E_Kb"] > 0 else 0.0
+
     out_dir = Path(cfg["paths"]["output_dir"]) / (run_name + "_grid")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -262,8 +282,15 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                 R_det  = float(R_det_arr[iy, ix])        # cm
                 Omega  = float(Omega_arr[iy, ix])        # sr
 
-                # φ(E, r_mn) = P_eff · sinΦ / R_src²  [ph/cm²/s/keV]
-                phi_mn = P_eff * sinPhi / (R_src ** 2)
+                # Air path: only the part outside the tube and detector
+                # housings (vacuum inside) is in air.
+                L_in  = max(R_src - src_vacuum, 0.0)
+                L_out = max(R_det - det_vacuum, 0.0)
+                T_out = np.exp(-mu_air_grid * L_out)   # for outgoing photons at E
+
+                # φ(E, r_mn) = P_eff · sinΦ / R_src² · T_in(E)  [ph/cm²/s/keV]
+                phi_mn = (P_eff * sinPhi / (R_src ** 2)
+                          * np.exp(-mu_air_grid * L_in))
 
                 # (Ω/4π)·ΔS — for isotropic fluorescence emission
                 cell_factor = (Omega / (4.0 * np.pi)) * geo.dS
@@ -281,7 +308,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     sample_conc, anomalous_cache,
                 )
                 denom_coh = sample_mu * (1.0 + sinPhi / sinPsi)
-                I_coh_total += coh_factor * np.where(
+                I_coh_total += coh_factor * T_out * np.where(
                     denom_coh > 0, phi_mn * sigma_coh / denom_coh, 0.0)
 
                 # ── Incoherent (Compton) scattering ───────────────────────────
@@ -310,7 +337,8 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                 incoh_at_scattered = incoh_raw * jacobian
                 # Redistribute onto the output energy grid using the
                 # (monotone) mapping E_i → E'_i via linear interpolation.
-                I_incoh_total += np.interp(
+                # The output grid is the scattered energy, so T_out applies there.
+                I_incoh_total += T_out * np.interp(
                     energy_kev, E_compton, incoh_at_scattered,
                     left=0.0, right=0.0,
                 )
@@ -323,6 +351,10 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
                     Z = kp["Z"]
 
+                    # Air transmission on the way to the detector, per line
+                    T_Ka = np.exp(-kp["mu_air_Ka"] * L_out)
+                    T_Kb = np.exp(-kp["mu_air_Kb"] * L_out)
+
                     # K-alpha (KA1 + KA2 group)
                     if kp["E_Ka"] > 0 and kp["P_Ka"] > 0:
                         mu_Ka = float(f_mu_interp(kp["E_Ka"]))
@@ -332,7 +364,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                         )
                         key = (el, "Ka")
                         line_totals[key] = (line_totals.get(key, 0.0)
-                                            + cell_factor * raw * w
+                                            + cell_factor * T_Ka * raw * w
                                             * kp["wK"] * kp["R_jump"] * kp["P_Ka"])
 
                     # K-beta (KB1 + KB2 + KB3 group)
@@ -344,12 +376,12 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                         )
                         key = (el, "Kb")
                         line_totals[key] = (line_totals.get(key, 0.0)
-                                            + cell_factor * raw * w
+                                            + cell_factor * T_Kb * raw * w
                                             * kp["wK"] * kp["R_jump"] * kp["P_Kb"])
 
                     # Secondary (inter-element) K fluorescence — adds into the
                     # same Kα/Kβ accumulators with the identical A-side
-                    # multiplier (cell_factor · w · ωK · R_jump · p_line).
+                    # multiplier (cell_factor · T_line · w · ωK · R_jump · p_line).
                     exciters = exc_by_analyte.get(el) if include_secondary else None
                     if exciters:
                         if kp["E_Ka"] > 0 and kp["P_Ka"] > 0:
@@ -360,7 +392,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                             )
                             key = (el, "Ka")
                             line_totals[key] = (line_totals.get(key, 0.0)
-                                                + cell_factor * raw_s * w
+                                                + cell_factor * T_Ka * raw_s * w
                                                 * kp["wK"] * kp["R_jump"] * kp["P_Ka"])
                         if kp["E_Kb"] > 0 and kp["P_Kb"] > 0:
                             mu_Kb = float(f_mu_interp(kp["E_Kb"]))
@@ -370,7 +402,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                             )
                             key = (el, "Kb")
                             line_totals[key] = (line_totals.get(key, 0.0)
-                                                + cell_factor * raw_s * w
+                                                + cell_factor * T_Kb * raw_s * w
                                                 * kp["wK"] * kp["R_jump"] * kp["P_Kb"])
 
                     # L-shell (all lines with non-zero rate for this Z)
@@ -379,8 +411,9 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                         sample_mu, f_mu_interp,
                     ):
                         key = (el, r["line_name"])
+                        T_L = np.exp(-float(mu_air(r["E_line"])) * L_out)
                         line_totals[key] = (line_totals.get(key, 0.0)
-                                            + cell_factor * w * r["I_raw"])
+                                            + cell_factor * T_L * w * r["I_raw"])
 
         # ── Build output DataFrame ────────────────────────────────────────────
         rows = []

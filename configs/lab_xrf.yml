@@ -57,6 +57,17 @@ det_normal: [-0.707, 0.0, -0.707]
 # mm² / 100 (e.g. 17 mm² → 0.17).
 det_area: 0.17
 
+# ── Atmosphere ────────────────────────────────────────────────────────────────
+# Gas between tube, sample and detector: vacuum (no absorption) or air
+# (dry air at sea level, NIST composition, 1.205e-3 g/cm³).
+atmosphere: air
+
+# Part of each path that is inside the housing, in vacuum [cm]: from the focal
+# spot to the tube exit window, and from the Si crystal to the detector window
+# (from the datasheets). The air path is the distance to each cell minus this.
+src_vacuum_path_cm: 0.0
+det_vacuum_path_cm: 0.0
+
 # ── Grid definition (cm) ──────────────────────────────────────────────────
 # The code has no beam-footprint model yet (review problem 6), so the grid
 # IS the illuminated area: set it to the beam spot on the sample

@@ -172,6 +172,7 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | `tube.*` | X-ray tube for the SpekPy spectrum: `kvp`, `target`, `transmission_thickness_um`, `filters` (mm), `energy_step_keV`, `current_mA` |
 | `src_reference_distance_cm` | distance at which a flux file was evaluated (only without `tube:`); `flux_units` is optional, its only value is `ph_per_cm2_per_s_per_keV` |
 | `src_x/y/z`, `det_x/y/z`, `det_normal`, `det_area` | source & detector geometry (cm) |
+| `atmosphere`, `src_vacuum_path_cm`, `det_vacuum_path_cm` | gas between tube, sample and detector (`vacuum`, the default, or `air`) and the part of each path inside the housings (cm) |
 | `grid_{x,y}_{min,max}`, `grid_n_{x,y}` | sample surface integration grid |
 | `be_window_mm`, `si_active_layer_um`, `detector_fano`, `detector_enc_electrons` | detector response |
 | `mca_live_time_s` | acquisition time used to scale the `.mca` counts (default 1 s) |
