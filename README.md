@@ -35,7 +35,7 @@ All distances are in **cm**; cross-sections are in **cm²/g**.
 | Excitation spectrum | `tube:` block in the config, or `data/flux/*.qdp` | X-ray tube spectrum generated with [SpekPy](https://bitbucket.org/spekpy/spekpy_release), or flare spectra from a file |
 | Sample compositions | `data/element_params/Data_keV.xlsx` | element rows, one column per sample; used for concentrations |
 | Coherent form factors | `data/form_factors/form_factor_coherent_scatter.xlsx` | anomalous scattering factors |
-| Instrument config | `configs/*.yml` | `deimos.yml`, `kaguya.yml`, `lab_xrf.yml` |
+| Instrument config | `configs/*.yml` | `lab_xrf.yml` |
 
 With a `tube:` block (as in `lab_xrf.yml`) the spectrum is computed at run time
 from the tube settings (voltage, target, window, current) and no flux file is

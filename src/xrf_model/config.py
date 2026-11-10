@@ -20,11 +20,7 @@ def load_config(yaml_path: str | Path) -> dict:
 
     cfg = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
 
-    for k in ["theta", "phi", "altitude", "distance_sun_AU", "footprint"]:
-        if k in cfg:
-            cfg[k] = float(cfg[k])
-
-    # New lab-geometry keys (optional — only present in lab configs)
+    # Lab-geometry keys
     for k in ["src_x", "src_y", "src_z",
               "det_x", "det_y", "det_z",
               "det_area",
