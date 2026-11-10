@@ -57,18 +57,22 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         I_det(ip) = Σ_{m,n}  dΩ/(4π) · ΔS
                     · ∫ Q_ip(E) φ(E,r_mn) / [μ(E)/sinΦ + μ(ip)/sinΨ] dE
 
-    where φ(E, r_mn) = P(E) · sinΦ_mn / R_src_mn².
+    where φ(E, r_mn) = P(E) · sinΦ_mn / R_src_mn², with R_src_mn the
+    straight-line distance from the focal spot to the point (not the height).
 
     Source spectrum
     ---------------
+    P(E) is the source term in ph/s/keV/sr, which does not depend on distance.
+
     If the config has a ``tube:`` block, P(E) is generated with SpekPy (see
-    tube.py) in ph/s/keV/sr and flux_file must be None.
+    tube.py) and flux_file must be None.
 
-    Otherwise flux_file is read.  With flux_units = ph_per_cm2_per_s_per_keV
-    the file delivers P_raw(E) in ph/cm²/s/keV at reference distance
-    src_reference_distance_cm [cm] from the source.  The code converts:
+    Otherwise flux_file is read.  It delivers P_raw(E) in ph/cm²/s/keV at
+    reference distance src_reference_distance_cm [cm] from the source, on the
+    beam axis (flux_units = ph_per_cm2_per_s_per_keV, the only option).  The
+    code converts it to the source term:
 
-        P_eff(E) = P_raw(E) × d_ref²
+        P_eff(E) = P_raw(E) × d_ref²   [ph/s/keV/sr]
 
     so that phi_mn = P_eff × sinΦ / R_cm² is in ph/cm²/s/keV and the
     accumulated output intensity is in ph/s.
@@ -94,16 +98,13 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         energy_kev, flux_raw = load_flux_data(str(flux_file))
 
         flux_units = cfg.get("flux_units", "ph_per_cm2_per_s_per_keV")
-        if flux_units == "ph_per_cm2_per_s_per_keV":
-            # flux_raw: ph/cm²/s/keV at d_ref [cm] from source (SpekPy z_cm)
-            # P_eff: ph/s/keV  (source spectral luminosity, geometry-independent)
-            d_ref = float(cfg["src_reference_distance_cm"])
-            P_eff = flux_raw * (d_ref ** 2)
-        elif flux_units == "ph_per_s_per_keV":
-            # flux_raw is already a source luminosity — no reference distance needed
-            P_eff = flux_raw                   # ph/s/keV
-        else:
-            raise ValueError(f"Unknown flux_units: {flux_units!r}")
+        if flux_units != "ph_per_cm2_per_s_per_keV":
+            raise ValueError(f"Unknown flux_units: {flux_units!r} "
+                             "(the only option is ph_per_cm2_per_s_per_keV)")
+        # flux_raw: ph/cm²/s/keV at d_ref [cm] from the source, on the beam
+        # axis.  The fluence falls as 1/d², so × d_ref² gives ph/s/keV/sr.
+        d_ref = float(cfg["src_reference_distance_cm"])
+        P_eff = flux_raw * (d_ref ** 2)                  # ph/s/keV/sr
 
     # ── Concentrations ────────────────────────────────────────────────────────
     df_params = pd.read_excel(cfg["paths"]["element_data"], index_col=0)

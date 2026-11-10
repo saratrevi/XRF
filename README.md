@@ -41,9 +41,10 @@ from the tube settings (voltage, target, window, current) and no flux file is
 passed. `data/flux/spectrum_xraytube.txt` is the same tube spectrum at 0.002 mA,
 kept as a reference for the tests.
 
-A flux file column can be in `ph/cm²/s/keV` at a reference distance
-(`src_reference_distance_cm`) or already a source luminosity in `ph/s/keV`,
-selected via `flux_units` in the config.
+A flux file gives `ph/cm²/s/keV` on the beam axis at the distance
+`src_reference_distance_cm` from the source. The code multiplies it by that
+distance squared to get the source term in `ph/s/keV/sr`, which does not
+depend on distance.
 
 ## Outputs
 
@@ -169,7 +170,7 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | `concentration_cols` | which sample column(s) of `Data_keV.xlsx` to run |
 | `include_secondary` | include inter-element secondary K fluorescence |
 | `tube.*` | X-ray tube for the SpekPy spectrum: `kvp`, `target`, `transmission_thickness_um`, `filters` (mm), `energy_step_keV`, `current_mA` |
-| `flux_units`, `src_reference_distance_cm` | flux-file normalisation (only without `tube:`) |
+| `src_reference_distance_cm` | distance at which a flux file was evaluated (only without `tube:`); `flux_units` is optional, its only value is `ph_per_cm2_per_s_per_keV` |
 | `src_x/y/z`, `det_x/y/z`, `det_normal`, `det_area` | source & detector geometry (cm) |
 | `grid_{x,y}_{min,max}`, `grid_n_{x,y}` | sample surface integration grid |
 | `be_window_mm`, `si_active_layer_um`, `detector_fano`, `detector_enc_electrons` | detector response |

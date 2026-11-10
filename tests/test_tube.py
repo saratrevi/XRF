@@ -40,6 +40,12 @@ def test_tube_block_and_flux_file_together_is_an_error():
         run_one_grid(TUBE_FILE, {"tube": LAB_TUBE})
 
 
+def test_removed_luminosity_option_is_an_error():
+    # ph_per_s_per_keV used to pass a total output on without dividing by 4π
+    with pytest.raises(ValueError, match="flux_units"):
+        run_one_grid(TUBE_FILE, {"flux_units": "ph_per_s_per_keV"})
+
+
 def test_no_source_spectrum_is_an_error():
     with pytest.raises(ValueError, match="No source spectrum"):
         run_one_grid(None, {})
