@@ -9,9 +9,8 @@ import numpy as np
 import pytest
 import xraylib
 
-from xrf_model.compton import (
-    DP, _P, bin_edges, compton_kernel, element_shells, sample_profile,
-)
+from xrf_model.compton import DP, _P, compton_kernel, element_shells, sample_profile
+from xrf_model.energy_grid import bin_edges
 
 THETA = np.pi / 2
 MC2 = 510.99895

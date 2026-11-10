@@ -144,7 +144,7 @@ def test_pipeline_writes_the_spectrum_on_the_matrix_channels(tmp_path):
     # channels up to 55 keV, so the 50 kV tube spectrum and its broadening fit
     matrix = write_matrix(tmp_path / "pipe.npz", n_channels=11000)
     cfg = load_config(ROOT / "configs" / "lab_xrf.yml")
-    cfg = {k: v for k, v in cfg.items() if k != "tube"}
+    cfg = {k: v for k, v in cfg.items() if k not in ("tube", "mca_calibration", "mca_channels")}
     cfg.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1,
                detector_response={"file": str(matrix), "rows": "per_detected_photon"})
     cfg["paths"] = dict(cfg["paths"], output_dir=str(tmp_path / "out"))

@@ -35,7 +35,7 @@ def load_config(yaml_path: str | Path) -> dict:
         if k in cfg:
             cfg[k] = float(cfg[k])
 
-    for k in ["grid_n_x", "grid_n_y"]:
+    for k in ["grid_n_x", "grid_n_y", "mca_channels"]:
         if k in cfg:
             cfg[k] = int(cfg[k])
 
@@ -45,6 +45,10 @@ def load_config(yaml_path: str | Path) -> dict:
     response = cfg.get("detector_response")
     if response:
         response["file"] = str((root / response["file"]).resolve())
+
+    # MCA calibration file (PyMca .calib), relative to the repo root unless absolute
+    if cfg.get("mca_calibration"):
+        cfg["mca_calibration"] = str((root / cfg["mca_calibration"]).resolve())
 
     # Resolve paths
     paths = cfg.get("paths", {})

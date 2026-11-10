@@ -130,9 +130,3 @@ def compton_kernel(profile: dict, energy_in: np.ndarray, out_edges: np.ndarray,
             j = np.clip(np.searchsorted(out_edges, E_c) - 1, 0, widths.size - 1)
             K[rows[~ok], j] = 1.0
     return K / widths[None, :]
-
-
-def bin_edges(centres: np.ndarray) -> np.ndarray:
-    """Edges halfway between bin centres, ends extended by half a bin."""
-    mid = 0.5 * (centres[1:] + centres[:-1])
-    return np.concatenate([[2 * centres[0] - mid[0]], mid, [2 * centres[-1] - mid[-1]]])

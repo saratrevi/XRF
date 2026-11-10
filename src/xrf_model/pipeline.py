@@ -25,7 +25,9 @@ from .geometry import GridGeometry
 from .tube import tube_source_term
 from .atmosphere import attenuation_coefficient
 from .detector_response import load_response, build_spectrum_with_response
-from .compton import bin_edges, compton_kernel, sample_profile
+from .compton import compton_kernel, sample_profile
+from .energy_grid import bin_edges
+from .output import read_calibration
 
 
 def _k_group(Z: int, line_attr_names: list) -> tuple:
@@ -95,6 +97,13 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     if "detector_enc_electrons" in cfg:
         raise ValueError("detector_enc_electrons was replaced by detector_noise_eV "
                          "(= ENC × w) and detector_w_eV; see configs/lab_xrf.yml.")
+
+    # .mca channels: a real MCA's calibration, read now so a bad file fails early
+    mca_calibration = (read_calibration(cfg["mca_calibration"])
+                       if cfg.get("mca_calibration") else None)
+    mca_channels = cfg.get("mca_channels")
+    if mca_calibration is not None and not mca_channels:
+        raise ValueError("mca_calibration needs mca_channels (the number of MCA channels)")
 
     # ── Source spectrum ───────────────────────────────────────────────────────
     tube_cfg = cfg.get("tube")
@@ -516,7 +525,8 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         mca_path  = out_dir / f"{run_name}_{conc}_spectrum.mca"
         save_mca(spec_energy, spectrum, str(mca_path),
                  description=f"XRF simulated spectrum — {conc}",
-                 live_time=live_time)
+                 live_time=live_time,
+                 calibration=mca_calibration, n_channels=mca_channels)
 
         plot_path = out_dir / f"{run_name}_{conc}_spectrum.png"
         src = geo.r_src

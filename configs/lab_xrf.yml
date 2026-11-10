@@ -117,3 +117,16 @@ detector_noise_eV: 12.7     # electronic noise σ_el [eV rms]
 detector_response:
   file: matrice_RMF_FastSDD_no_broadening.npz
   rows: per_detected_photon
+
+# ── .mca output ───────────────────────────────────────────────────────────────
+# Counts per channel = rate × mca_live_time_s (seconds of live time).
+mca_live_time_s: 1.0
+
+# Channels of the real MCA, so the simulated .mca lines up channel by channel
+# with a measurement: a PyMca .calib file, E(ch) = A + B·ch + C·ch² [keV], and
+# the number of channels. Use the calibration made at the same gain setting as
+# the measurement (the .mca files record it as GAIN= in their DP5 section).
+# The calib_file/ folder is kept on this computer only (git-ignored).
+# Without these two keys, the .mca uses the spectrum's own energy grid.
+mca_calibration: calib_file/cal_Am241_Fe55_Ce137_gain7.5_2.calib
+mca_channels: 8192

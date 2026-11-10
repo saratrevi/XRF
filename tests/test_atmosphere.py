@@ -35,8 +35,10 @@ def test_unknown_atmosphere_is_an_error():
 @pytest.fixture(scope="module")
 def one_cell(tmp_path_factory):
     cfg = load_config(ROOT / "configs" / "lab_xrf.yml")
-    # no tube (file route) and no local response matrix: tests use repo files only
-    base = {k: v for k, v in cfg.items() if k not in ("tube", "detector_response")}
+    # no tube (file route), no local response matrix or MCA calibration:
+    # tests use repo files only
+    local = ("tube", "detector_response", "mca_calibration", "mca_channels")
+    base = {k: v for k, v in cfg.items() if k not in local}
     base.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1,
                 atmosphere="vacuum", src_vacuum_path_cm=0.0, det_vacuum_path_cm=0.0)
     base["paths"] = dict(cfg["paths"], output_dir=str(tmp_path_factory.mktemp("air")))

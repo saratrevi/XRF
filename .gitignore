@@ -189,3 +189,6 @@ outputs/
 # Detector response matrices: kept on this computer only
 *.npy
 *.npz
+
+# MCA energy calibrations of the lab detector: kept on this computer only
+calib_file/

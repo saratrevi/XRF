@@ -179,3 +179,4 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | `detector_fano`, `detector_w_eV`, `detector_noise_eV` | peak broadening, σ² = F·w·E + σ_el² |
 | `detector_response.file`, `detector_response.rows` | optional Monte Carlo response matrix (`.npz`, deposited energy before broadening; format in `lab_xrf.yml`). Without it, peaks are pure Gaussians. Pile-up and dead time are not modelled. |
 | `mca_live_time_s` | acquisition time used to scale the `.mca` counts (default 1 s) |
+| `mca_calibration`, `mca_channels` | optional: write the `.mca` on a real MCA's channels, from a PyMca `.calib` file (E = A + B·ch + C·ch², keV). Without them the `.mca` uses the spectrum's own grid, rebinned to equal channels if its steps are unequal |
