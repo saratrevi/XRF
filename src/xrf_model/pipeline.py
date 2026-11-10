@@ -24,6 +24,7 @@ from .physics import (
 from .geometry import GridGeometry
 from .tube import tube_source_term
 from .atmosphere import attenuation_coefficient
+from .detector_response import load_response, build_spectrum_with_response
 
 
 def _k_group(Z: int, line_attr_names: list) -> tuple:
@@ -90,6 +91,10 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     All atomic parameters are fetched from xraylib (no spreadsheet look-ups).
     All distances are in cm.  Cross-sections from xraylib are in cm²/g.
     """
+    if "detector_enc_electrons" in cfg:
+        raise ValueError("detector_enc_electrons was replaced by detector_noise_eV "
+                         "(= ENC × w) and detector_w_eV; see configs/lab_xrf.yml.")
+
     # ── Source spectrum ───────────────────────────────────────────────────────
     tube_cfg = cfg.get("tube")
     if tube_cfg is not None:
@@ -184,6 +189,10 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     mu_air_grid = mu_air(energy_kev)
     src_vacuum = float(cfg.get("src_vacuum_path_cm", 0.0))
     det_vacuum = float(cfg.get("det_vacuum_path_cm", 0.0))
+    # ── Detector response matrix (optional; otherwise Gaussian peaks) ─────────
+    response_cfg = cfg.get("detector_response")
+    response = load_response(response_cfg["file"]) if response_cfg else None
+
     for kp in k_params.values():
         # E = 0 means the line does not exist for this element (e.g. Kβ of O)
         kp["mu_air_Ka"] = float(mu_air(kp["E_Ka"])) if kp["E_Ka"] > 0 else 0.0
@@ -466,20 +475,32 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         print(f"→ Saved to {xlsx_path}")
 
         # ── Simulated detector spectrum ───────────────────────────────────────
-        be_mm         = float(cfg.get("be_window_mm",            0.125))
-        si_active_um  = float(cfg.get("si_active_layer_um",     450.0))
-        fano          = float(cfg.get("detector_fano",           0.115))
-        enc_electrons = float(cfg.get("detector_enc_electrons",  8.0))
+        be_mm        = float(cfg.get("be_window_mm",       0.125))
+        si_active_um = float(cfg.get("si_active_layer_um", 450.0))
+        fano         = float(cfg.get("detector_fano",      0.115))
+        w_ev         = float(cfg.get("detector_w_eV",      3.62))
+        noise_ev     = float(cfg.get("detector_noise_eV",  8.0 * 3.62))
 
-        spectrum = build_spectrum(
-            energy_kev, I_coh_total, df_fluo,
-            be_mm=be_mm, si_active_um=si_active_um,
-            fano=fano, enc_electrons=enc_electrons,
-            I_incoherent=I_incoh_total,
-        )
+        if response is not None:
+            # spectrum on the matrix channels
+            spec_energy, spectrum = build_spectrum_with_response(
+                energy_kev, I_coh_total, df_fluo, response,
+                rows=response_cfg.get("rows", "per_detected_photon"),
+                be_mm=be_mm, si_active_um=si_active_um,
+                fano=fano, noise_ev=noise_ev, w_ev=w_ev,
+                I_incoherent=I_incoh_total,
+            )
+        else:
+            spec_energy = energy_kev
+            spectrum = build_spectrum(
+                energy_kev, I_coh_total, df_fluo,
+                be_mm=be_mm, si_active_um=si_active_um,
+                fano=fano, noise_ev=noise_ev, w_ev=w_ev,
+                I_incoherent=I_incoh_total,
+            )
 
         spec_xlsx_path = out_dir / f"{run_name}_{conc}_spectrum.xlsx"
-        pd.DataFrame({"Energy_keV": energy_kev,
+        pd.DataFrame({"Energy_keV": spec_energy,
                       "Intensity_ph_s_per_keV": spectrum}).to_excel(
             spec_xlsx_path, index=False)
         print(f"→ Saved spectrum to {spec_xlsx_path}")
@@ -491,14 +512,14 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
             fh.write(f"#S 1  XRF simulated spectrum — {conc}\n")
             fh.write("#N 2\n")
             fh.write("#L Energy[keV]  Intensity[ph/s/keV]\n")
-            for e, s in zip(energy_kev, spectrum):
+            for e, s in zip(spec_energy, spectrum):
                 fh.write(f"{e:.6f}  {s:.6e}\n")
         print(f"→ Saved PyMca file to {dat_path}")
 
         # ORTEC PMCA .mca export — integer counts per channel, readable by PyMCA
         live_time = float(cfg.get("mca_live_time_s", 1.0))
         mca_path  = out_dir / f"{run_name}_{conc}_spectrum.mca"
-        save_mca(energy_kev, spectrum, str(mca_path),
+        save_mca(spec_energy, spectrum, str(mca_path),
                  description=f"XRF simulated spectrum — {conc}",
                  live_time=live_time)
 
@@ -511,7 +532,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         det_angle = float(np.degrees(np.arctan2(np.sqrt(det[0]**2 + det[1]**2), det[2])))
         geo_info = dict(src_dist_cm=src_dist, src_angle_deg=src_angle,
                         det_dist_cm=det_dist, det_angle_deg=det_angle)
-        plot_and_save_spectrum(energy_kev, spectrum, df_fluo, plot_path,
+        plot_and_save_spectrum(spec_energy, spectrum, df_fluo, plot_path,
                                conc_label=conc, geo_info=geo_info)
 
         results_dict[conc] = {

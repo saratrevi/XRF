@@ -7,6 +7,11 @@ Assembles a simulated spectrum in ph/s/keV on an arbitrary energy grid by:
   - Adding Gaussian-broadened fluorescence lines
   - Multiplying by the active-Si quantum efficiency
 
+This is the simple response, used when the config has no detector_response
+matrix: peaks are pure Gaussians, with no escape peaks, tailing or shelf.
+With a matrix, detector_response.py is used instead.  Neither models pile-up
+or dead time.
+
 All distance inputs (be_mm, si_active_um) are converted to cm internally.
 df_fluo must be the DataFrame written to the Fluorescence sheet by the
 pipeline, with at minimum the columns E_line_keV and Intensity_ph_s.
@@ -63,34 +68,34 @@ def qe_active_si(energy_kev: np.ndarray, si_active_um: float) -> np.ndarray:
     return 1.0 - np.exp(-mu_si * rho_si * si_cm)
 
 
-def sigma_kev(energy_kev, fano: float, enc_electrons: float):
+def sigma_kev(energy_kev, fano: float, noise_ev: float, w_ev: float):
     """
     Gaussian sigma of the SDD response in keV.
 
-    Uses the standard Fano formula:
-        sigma = sqrt(fano * w * E + (enc * w)^2)
-
-    where w = 3.62e-3 keV/e-h pair for silicon.
+    Uses the two-term formula:
+        sigma² = fano · w · E + sigma_el²
 
     Parameters
     ----------
-    energy_kev    : scalar or array of photon energies [keV]
-    fano          : Fano factor (~0.115 for Si)
-    enc_electrons : electronic noise [electrons equivalent]
+    energy_kev : scalar or array of photon energies [keV]
+    fano       : effective Fano factor, measured together with w
+    noise_ev   : electronic noise sigma_el [eV rms]
+    w_ev       : energy per electron-hole pair used with fano [eV]
 
     Returns
     -------
     sigma in keV, same type/shape as energy_kev
     """
-    w = 3.62e-3  # keV per electron-hole pair in Si
-    return np.sqrt(fano * w * energy_kev + (enc_electrons * w) ** 2)
+    w_kev, noise_kev = w_ev / 1000.0, noise_ev / 1000.0
+    return np.sqrt(fano * w_kev * energy_kev + noise_kev ** 2)
 
 
 def _smear_continuum(
     energy_grid: np.ndarray,
     spectrum: np.ndarray,
     fano: float,
-    enc_electrons: float,
+    noise_ev: float,
+    w_ev: float,
 ) -> np.ndarray:
     """
     Convolve a continuum spectrum with the energy-dependent SDD Gaussian.
@@ -105,14 +110,14 @@ def _smear_continuum(
     ----------
     energy_grid   : sorted 1D array [keV]
     spectrum      : 1D array [ph/s/keV] on energy_grid
-    fano, enc_electrons : detector resolution parameters
+    fano, noise_ev, w_ev : detector resolution parameters (see sigma_kev)
 
     Returns
     -------
     smeared : 1D array [ph/s/keV]
     """
     dE  = np.gradient(energy_grid)
-    sig = sigma_kev(energy_grid, fano, enc_electrons)          # (N,) at source energies
+    sig = sigma_kev(energy_grid, fano, noise_ev, w_ev)         # (N,) at source energies
 
     # diff[i, j] = energy_grid[i] - energy_grid[j]
     diff  = energy_grid[:, np.newaxis] - energy_grid[np.newaxis, :]   # (N_out, N_in)
@@ -129,7 +134,8 @@ def build_spectrum(
     be_mm: float,
     si_active_um: float,
     fano: float,
-    enc_electrons: float,
+    noise_ev: float,
+    w_ev: float,
     I_incoherent: np.ndarray | None = None,
 ) -> np.ndarray:
     """
@@ -152,8 +158,9 @@ def build_spectrum(
     df_fluo       : DataFrame with columns E_line_keV and Intensity_ph_s
     be_mm         : Be window thickness [mm]
     si_active_um  : active Si crystal thickness [µm]
-    fano          : Fano factor
-    enc_electrons : ENC [electrons equivalent]
+    fano          : effective Fano factor, measured together with w_ev
+    noise_ev      : electronic noise sigma_el [eV rms]
+    w_ev          : energy per electron-hole pair used with fano [eV]
     I_incoherent  : 1D array, incoherent (Compton) scatter intensity [ph/s/keV],
                     already redistributed to scattered-photon energies.
                     If None, Compton scatter is not included.
@@ -171,7 +178,7 @@ def build_spectrum(
 
     # Continuum: apply Be transmission, smear with detector resolution, then QE
     continuum_pre = continuum * T * QE
-    spectrum = _smear_continuum(energy_grid, continuum_pre, fano, enc_electrons)
+    spectrum = _smear_continuum(energy_grid, continuum_pre, fano, noise_ev, w_ev)
 
     for _, row in df_fluo.iterrows():
         E0 = row["E_line_keV"]
@@ -179,7 +186,7 @@ def build_spectrum(
         if not np.isfinite(E0) or I0 <= 0.0:
             continue
 
-        sig = float(sigma_kev(E0, fano, enc_electrons))
+        sig = float(sigma_kev(E0, fano, noise_ev, w_ev))
         # Gaussian PDF [1/keV]: integrates to 1 over energy → I0 * gauss has units ph/s/keV ✓
         gauss       = np.exp(-0.5 * ((energy_grid - E0) / sig) ** 2) / (sig * np.sqrt(2.0 * np.pi))
         T_at_line   = float(np.interp(E0, energy_grid, T))

@@ -185,3 +185,7 @@ cython_debug/
 results/
 output/
 outputs/
+
+# Detector response matrices: kept on this computer only
+*.npy
+*.npz

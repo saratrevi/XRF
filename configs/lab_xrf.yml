@@ -90,7 +90,29 @@ grid_y_max:  0.4
 grid_n_y:    2
 
 # ── Detector response ────────────────────────────────────────────────────────
-be_window_mm:           0.125   # Be entrance window thickness [mm], from the datasheet (12.5 µm = 0.0125)
-si_active_layer_um:     450.0   # Active Si crystal thickness [µm] — sets high-E quantum efficiency
-detector_fano:          0.115   # Fano factor for silicon (fixed)
-detector_enc_electrons: 8.0     # Electronic noise [electrons equivalent] — adjust by calibration
+be_window_mm:       0.0127  # Be entrance window thickness [mm], from the datasheet (12.7 µm = 0.0127)
+si_active_layer_um: 450.0   # Active Si crystal thickness [µm] — sets high-E quantum efficiency
+
+# Broadening of each deposited energy E:  σ² = F · w · E + σ_el²
+# F and w must be the pair used in the calibration that measured F.
+detector_fano:     0.1180   # effective Fano factor F
+detector_w_eV:     3.65     # energy per electron-hole pair w [eV]
+detector_noise_eV: 12.7     # electronic noise σ_el [eV rms]
+
+# Optional Monte Carlo response matrix: the energy deposited in the detector
+# per photon, BEFORE electronic broadening (the broadening above is applied
+# on top). Without it, every peak is a pure Gaussian.
+# The file is a NumPy .npz with three arrays:
+#   energy_in_keV      (N_in,)       photon energy of each row, increasing
+#   channel_edges_keV  (N_ch + 1,)   edges of the deposited-energy channels, equal width
+#   response           (N_in, N_ch)  probability that a photon of energy_in_keV[i]
+#                                    deposits an energy in channel j
+# rows: per_detected_photon  → each row sums to 1; the code applies the Be
+#                              window and Si efficiency above
+#       per_incident_photon  → each row sums to the detection efficiency; window
+#                              and efficiency are already in the matrix
+# The spectrum is then written on the matrix channels. The file is kept on
+# this computer only (*.npz is git-ignored); remove this block to run without it.
+detector_response:
+  file: matrice_RMF_FastSDD_no_broadening.npz
+  rows: per_detected_photon

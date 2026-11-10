@@ -174,5 +174,7 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | `src_x/y/z`, `det_x/y/z`, `det_normal`, `det_area` | source & detector geometry (cm) |
 | `atmosphere`, `src_vacuum_path_cm`, `det_vacuum_path_cm` | gas between tube, sample and detector (`vacuum`, the default, or `air`) and the part of each path inside the housings (cm) |
 | `grid_{x,y}_{min,max}`, `grid_n_{x,y}` | sample surface integration grid |
-| `be_window_mm`, `si_active_layer_um`, `detector_fano`, `detector_enc_electrons` | detector response |
+| `be_window_mm`, `si_active_layer_um` | detector window and Si efficiency |
+| `detector_fano`, `detector_w_eV`, `detector_noise_eV` | peak broadening, σ² = F·w·E + σ_el² |
+| `detector_response.file`, `detector_response.rows` | optional Monte Carlo response matrix (`.npz`, deposited energy before broadening; format in `lab_xrf.yml`). Without it, peaks are pure Gaussians. Pile-up and dead time are not modelled. |
 | `mca_live_time_s` | acquisition time used to scale the `.mca` counts (default 1 s) |

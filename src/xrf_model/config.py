@@ -41,6 +41,11 @@ def load_config(yaml_path: str | Path) -> dict:
 
     # det_normal stays as a list — normalised later in GridGeometry
 
+    # Detector response matrix path, relative to the repo root unless absolute
+    response = cfg.get("detector_response")
+    if response:
+        response["file"] = str((root / response["file"]).resolve())
+
     # Resolve paths
     paths = cfg.get("paths", {})
     cfg["paths"] = {
