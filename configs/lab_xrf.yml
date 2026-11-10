@@ -107,8 +107,9 @@ detector_noise_eV: 12.7     # electronic noise σ_el [eV rms]
 #   channel_edges_keV  (N_ch + 1,)   edges of the deposited-energy channels, equal width
 #   response           (N_in, N_ch)  probability that a photon of energy_in_keV[i]
 #                                    deposits an energy in channel j
-# rows: per_detected_photon  → each row sums to 1; the code applies the Be
-#                              window and Si efficiency above
+# rows: per_detected_photon  → each row sums to 1 (per photon that left energy
+#                              in the crystal); the code applies the Be window
+#                              and the Si efficiency (photoelectric + Compton)
 #       per_incident_photon  → each row sums to the detection efficiency; window
 #                              and efficiency are already in the matrix
 # The spectrum is then written on the matrix channels. The file is kept on

@@ -41,13 +41,24 @@ def transmission_be(energy_kev: np.ndarray, be_mm: float) -> np.ndarray:
     return np.exp(-mu_be * rho_be * be_cm)
 
 
-def qe_active_si(energy_kev: np.ndarray, si_active_um: float) -> np.ndarray:
+def qe_active_si(energy_kev: np.ndarray, si_active_um: float,
+                 include_compton: bool = False) -> np.ndarray:
     """
     Quantum efficiency of the active Si detector bulk.
 
-    Fraction of photons that are absorbed (and therefore detected) in a Si
-    layer of thickness si_active_um.  Follows Beer-Lambert:
+    Fraction of photons that interact in a Si layer of thickness
+    si_active_um and leave energy there.  Follows Beer-Lambert:
         QE = 1 - exp(-μ_Si * ρ_Si * d)
+
+    Which interactions count depends on how the response places photons:
+      include_compton=False  μ = photoelectric only.  For Gaussian peaks,
+                             which put every detected photon at its full
+                             energy: only photoabsorbed photons do that.
+      include_compton=True   μ = photoelectric + Compton.  For a response
+                             matrix normalised per photon that left energy in
+                             the crystal: the matrix itself puts Compton
+                             events in the low-energy shelf.
+    Rayleigh scattering is never counted: it leaves no energy.
 
     Low-energy photons are absorbed near the surface (QE→1); high-energy
     photons may pass through without interacting (QE<1 above ~15 keV for a
@@ -55,8 +66,9 @@ def qe_active_si(energy_kev: np.ndarray, si_active_um: float) -> np.ndarray:
 
     Parameters
     ----------
-    energy_kev    : 1D array of photon energies [keV]
-    si_active_um  : active Si thickness [µm]
+    energy_kev      : 1D array of photon energies [keV]
+    si_active_um    : active Si thickness [µm]
+    include_compton : also count Compton interactions (see above)
 
     Returns
     -------
@@ -64,7 +76,9 @@ def qe_active_si(energy_kev: np.ndarray, si_active_um: float) -> np.ndarray:
     """
     si_cm  = si_active_um / 1.0e4
     rho_si = 2.329  # g/cm³
-    mu_si  = np.array([xraylib.CS_Total(14, E) for E in energy_kev])
+    mu_si  = np.array([xraylib.CS_Photo(14, E)
+                       + (xraylib.CS_Compt(14, E) if include_compton else 0.0)
+                       for E in energy_kev])
     return 1.0 - np.exp(-mu_si * rho_si * si_cm)
 
 

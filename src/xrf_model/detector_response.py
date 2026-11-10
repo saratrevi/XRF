@@ -17,10 +17,11 @@ File format: a NumPy .npz with three arrays
                                      energy_in_keV[i] deposits an energy in
                                      channel j
 
-Rows are either per detected photon (each row sums to 1; the Be window and the
-Si absorption efficiency are applied by the code) or per incident photon (each
-row sums to the detection efficiency, so the window and efficiency are already
-inside the matrix).
+Rows are either per detected photon, meaning per photon that left energy in
+the crystal (each row sums to 1; the code applies the Be window and the Si
+efficiency for photoelectric + Compton interactions), or per incident photon
+(each row sums to the detection efficiency, so the window and efficiency are
+already inside the matrix).
 
 Not modelled: pile-up and dead time, which depend on the count rate.
 """
@@ -158,7 +159,10 @@ def build_spectrum_with_response(
                            lines["Intensity_ph_s"].to_numpy(float)])   # ph/s per line
 
     if rows == "per_detected_photon":
-        rate = rate * transmission_be(energy, be_mm) * qe_active_si(energy, si_active_um)
+        # rows are per photon that left energy in the crystal, so the
+        # efficiency counts photoelectric and Compton interactions
+        rate = (rate * transmission_be(energy, be_mm)
+                * qe_active_si(energy, si_active_um, include_compton=True))
 
     deposited = fold(response, energy, rate)
     centres = response["channel_centres_keV"]

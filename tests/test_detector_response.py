@@ -77,7 +77,8 @@ def test_counts_are_conserved_per_detected_photon(delta):
     energy, continuum, lines = inputs()
     E, S = build_spectrum_with_response(energy, continuum, lines, delta,
                                         rows="per_detected_photon", **DETECTOR)
-    eff = lambda e: transmission_be(np.atleast_1d(e), 0.125) * qe_active_si(np.atleast_1d(e), 450.0)
+    eff = lambda e: (transmission_be(np.atleast_1d(e), 0.125)
+                     * qe_active_si(np.atleast_1d(e), 450.0, include_compton=True))
     expected = (np.sum(continuum * np.gradient(energy) * eff(energy))
                 + 50.0 * eff(3.69)[0] + 200.0 * eff(6.40)[0])
     assert np.sum(S) * WIDTH == pytest.approx(expected, rel=1e-9)
@@ -101,6 +102,8 @@ def test_escape_peak_moves_with_the_line(tmp_path):
 
 
 def test_delta_matrix_matches_the_gaussian_path_for_the_continuum(delta):
+    # below 12 keV the two efficiencies (photoelectric, photoelectric + Compton)
+    # agree to better than 0.2%, so the two paths must give the same continuum
     energy, continuum, _ = inputs()
     no_lines = pd.DataFrame({"E_line_keV": [], "Intensity_ph_s": []})
     E, S = build_spectrum_with_response(energy, continuum, no_lines, delta,
@@ -153,7 +156,8 @@ def test_pipeline_writes_the_spectrum_on_the_matrix_channels(tmp_path):
     assert np.allclose(np.diff(spec.Energy_keV), WIDTH)
 
     E = r["energy"]
-    eff = lambda e: transmission_be(e, cfg["be_window_mm"]) * qe_active_si(e, cfg["si_active_layer_um"])
+    eff = lambda e: (transmission_be(e, cfg["be_window_mm"])
+                     * qe_active_si(e, cfg["si_active_layer_um"], include_compton=True))
     f = r["fluorescence"]
     f = f[np.isfinite(f.E_line_keV) & (f.Intensity_ph_s > 0)]
     expected = (np.sum((r["I_coherent"] + r["I_incoherent"]) * np.gradient(E) * eff(E))
