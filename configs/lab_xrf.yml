@@ -14,11 +14,17 @@ concentration_cols: ["soil_14163"]
 # false → primary only (Shiraiwa integral, original behaviour)
 include_secondary: true
 
-# ── Flux spectrum reference ───────────────────────────────────────────────────
-# flux_units: ph_per_cm2_per_s_per_keV → P_eff = flux_raw × d_ref² [ph/s/keV]
-# src_reference_distance_cm: SpekPy z_cm evaluation distance
-src_reference_distance_cm: 0.56
-flux_units: ph_per_cm2_per_s_per_keV   # options: ph_per_cm2_per_s_per_keV | ph_per_s_per_keV
+# ── X-ray tube (spectrum generated with SpekPy, see src/xrf_model/tube.py) ────
+# With this block present, run the pipeline with flux_file=None.
+tube:
+  kvp: 50                          # tube voltage [kV]
+  target: Ag                       # anode material
+  transmission_thickness_um: 1.0   # transmission target thickness [µm]
+  filters:                         # tube exit window and filters, thickness [mm]
+    Be: 0.125                      # (not the detector window, be_window_mm below)
+  energy_step_keV: 0.03            # spectrum bin width [keV]
+  current_mA: 0.002                # tube current [mA]; 0.002 reproduces the old
+                                   # spectrum_xraytube.txt run, set the real value
 
 # ── Instrument geometry (cm) ───────────────────────────────────────────────
 # X-ray tube focal spot position

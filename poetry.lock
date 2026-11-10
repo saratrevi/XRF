@@ -2924,6 +2924,22 @@ files = [
 ]
 
 [[package]]
+name = "spekpy"
+version = "2.5.4"
+description = "A Python software toolkit for modelling the x-ray spectra from x-ray tubes"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "spekpy-2.5.4-py3-none-any.whl", hash = "sha256:2f01e805721281b5a3e332500db577cedaf71bde0f0d3838745b915e6f1c258a"},
+    {file = "spekpy-2.5.4.tar.gz", hash = "sha256:c9ef77ff542761526b6488f8e677b93eb20d25cdf4be05da0ef6ee2aba146d2a"},
+]
+
+[package.dependencies]
+matplotlib = "*"
+scipy = "*"
+
+[[package]]
 name = "stack-data"
 version = "0.6.3"
 description = "Extract data from python stack frames and tracebacks for informative displays"
@@ -3178,4 +3194,4 @@ numpy = "*"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "a8ec208e0b3968157d0dbee7e0dccf91fa1d9110601a23a4782326a0b22bc5f4"
+content-hash = "1efce5e73f1f7deae150b5c530053050c419be71319b1310246b257567de20ea"

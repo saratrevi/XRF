@@ -22,6 +22,7 @@ from .physics import (
     _L_LINES,
 )
 from .geometry import GridGeometry
+from .tube import tube_source_term
 
 
 def _k_group(Z: int, line_attr_names: list) -> tuple:
@@ -58,9 +59,13 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
     where φ(E, r_mn) = P(E) · sinΦ_mn / R_src_mn².
 
-    Flux conversion
+    Source spectrum
     ---------------
-    The flux file delivers P_raw(E) in ph/cm²/s/keV at reference distance
+    If the config has a ``tube:`` block, P(E) is generated with SpekPy (see
+    tube.py) in ph/s/keV/sr and flux_file must be None.
+
+    Otherwise flux_file is read.  With flux_units = ph_per_cm2_per_s_per_keV
+    the file delivers P_raw(E) in ph/cm²/s/keV at reference distance
     src_reference_distance_cm [cm] from the source.  The code converts:
 
         P_eff(E) = P_raw(E) × d_ref²
@@ -71,23 +76,34 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     All atomic parameters are fetched from xraylib (no spreadsheet look-ups).
     All distances are in cm.  Cross-sections from xraylib are in cm²/g.
     """
-    flux_file = Path(flux_file)
-    run_name  = flux_file.stem
-
-    # ── Flux spectrum ─────────────────────────────────────────────────────────
-    energy_kev, flux_raw = load_flux_data(str(flux_file))
-
-    flux_units = cfg.get("flux_units", "ph_per_cm2_per_s_per_keV")
-    if flux_units == "ph_per_cm2_per_s_per_keV":
-        # flux_raw: ph/cm²/s/keV at d_ref [cm] from source (SpekPy z_cm)
-        # P_eff: ph/s/keV  (source spectral luminosity, geometry-independent)
-        d_ref = float(cfg["src_reference_distance_cm"])
-        P_eff = flux_raw * (d_ref ** 2)
-    elif flux_units == "ph_per_s_per_keV":
-        # flux_raw is already a source luminosity — no reference distance needed
-        P_eff = flux_raw                   # ph/s/keV
+    # ── Source spectrum ───────────────────────────────────────────────────────
+    tube_cfg = cfg.get("tube")
+    if tube_cfg is not None:
+        if flux_file is not None:
+            raise ValueError("The config has a `tube:` block, so the spectrum is "
+                             "generated: pass flux_file=None, or remove the "
+                             "block to use the file.")
+        energy_kev, P_eff = tube_source_term(tube_cfg)   # ph/s/keV/sr
+        run_name = f"tube_{float(tube_cfg['kvp']):g}kV_{tube_cfg['target']}"
+    elif flux_file is None:
+        raise ValueError("No source spectrum: pass a flux file or add a "
+                         "`tube:` block to the config.")
     else:
-        raise ValueError(f"Unknown flux_units: {flux_units!r}")
+        flux_file = Path(flux_file)
+        run_name  = flux_file.stem
+        energy_kev, flux_raw = load_flux_data(str(flux_file))
+
+        flux_units = cfg.get("flux_units", "ph_per_cm2_per_s_per_keV")
+        if flux_units == "ph_per_cm2_per_s_per_keV":
+            # flux_raw: ph/cm²/s/keV at d_ref [cm] from source (SpekPy z_cm)
+            # P_eff: ph/s/keV  (source spectral luminosity, geometry-independent)
+            d_ref = float(cfg["src_reference_distance_cm"])
+            P_eff = flux_raw * (d_ref ** 2)
+        elif flux_units == "ph_per_s_per_keV":
+            # flux_raw is already a source luminosity — no reference distance needed
+            P_eff = flux_raw                   # ph/s/keV
+        else:
+            raise ValueError(f"Unknown flux_units: {flux_units!r}")
 
     # ── Concentrations ────────────────────────────────────────────────────────
     df_params = pd.read_excel(cfg["paths"]["element_data"], index_col=0)

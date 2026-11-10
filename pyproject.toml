@@ -14,7 +14,8 @@ dependencies = [
     "matplotlib (>=3.10.8,<4.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "pyyaml (>=6.0.3,<7.0.0)",
-    "xraylib (>=4.2.1)"
+    "xraylib (>=4.2.1)",
+    "spekpy (>=2.5.4,<3.0.0)"
 ]
 
 

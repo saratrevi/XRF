@@ -5,3 +5,4 @@ matplotlib
 openpyxl
 pyyaml
 xraylib>=4.2.1
+spekpy>=2.5.4,<3

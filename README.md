@@ -31,12 +31,17 @@ All distances are in **cm**; cross-sections are in **cm²/g**.
 
 | Input | Location | Notes |
 |-------|----------|-------|
-| Excitation flux spectrum | `data/flux/*.qdp`, `data/flux/spectrum_xraytube.txt` | flare spectra or X-ray-tube output |
+| Excitation spectrum | `tube:` block in the config, or `data/flux/*.qdp` | X-ray tube spectrum generated with [SpekPy](https://bitbucket.org/spekpy/spekpy_release), or flare spectra from a file |
 | Sample compositions | `data/element_params/Data_keV.xlsx` | element rows, one column per sample; used for concentrations |
 | Coherent form factors | `data/form_factors/form_factor_coherent_scatter.xlsx` | anomalous scattering factors |
 | Instrument config | `configs/*.yml` | `deimos.yml`, `kaguya.yml`, `lab_xrf.yml` |
 
-The flux column can be in `ph/cm²/s/keV` at a reference distance
+With a `tube:` block (as in `lab_xrf.yml`) the spectrum is computed at run time
+from the tube settings (voltage, target, window, current) and no flux file is
+passed. `data/flux/spectrum_xraytube.txt` is the same tube spectrum at 0.002 mA,
+kept as a reference for the tests.
+
+A flux file column can be in `ph/cm²/s/keV` at a reference distance
 (`src_reference_distance_cm`) or already a source luminosity in `ph/s/keV`,
 selected via `flux_units` in the config.
 
@@ -115,20 +120,23 @@ from pathlib import Path
 from xrf_model.config import load_config
 from xrf_model.pipeline import run_one_grid
 
-cfg       = load_config("configs/lab_xrf.yml")
-flux_file = Path("data/flux/spectrum_xraytube.txt")
+cfg = load_config("configs/lab_xrf.yml")
 
-results = run_one_grid(flux_file, cfg, debugging=True)
-# → writes .xlsx / .dat / .mca / .png under results/lab_xrf/<run>_grid/
+# lab_xrf.yml has a `tube:` block, so no flux file is passed
+results = run_one_grid(None, cfg, debugging=True)
+# → writes .xlsx / .dat / .mca / .png under results/lab_xrf/tube_50kV_Ag_grid/
+
+# for a spectrum from a file (config without a `tube:` block):
+# results = run_one_grid(Path("data/flux/<spectrum>.qdp"), cfg)
 ```
 
 From a shell (make the package importable first):
 
 ```bash
 export PYTHONPATH="$(pwd)/src"
-python -c "from pathlib import Path; from xrf_model.config import load_config; \
+python -c "from xrf_model.config import load_config; \
 from xrf_model.pipeline import run_one_grid; \
-run_one_grid(Path('data/flux/spectrum_xraytube.txt'), load_config('configs/lab_xrf.yml'))"
+run_one_grid(None, load_config('configs/lab_xrf.yml'))"
 ```
 
 ## Notebook
@@ -160,7 +168,8 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | `paths.*` | input/output locations |
 | `concentration_cols` | which sample column(s) of `Data_keV.xlsx` to run |
 | `include_secondary` | include inter-element secondary K fluorescence |
-| `flux_units`, `src_reference_distance_cm` | flux normalisation |
+| `tube.*` | X-ray tube for the SpekPy spectrum: `kvp`, `target`, `transmission_thickness_um`, `filters` (mm), `energy_step_keV`, `current_mA` |
+| `flux_units`, `src_reference_distance_cm` | flux-file normalisation (only without `tube:`) |
 | `src_x/y/z`, `det_x/y/z`, `det_normal`, `det_area` | source & detector geometry (cm) |
 | `grid_{x,y}_{min,max}`, `grid_n_{x,y}` | sample surface integration grid |
 | `be_window_mm`, `si_active_layer_um`, `detector_fano`, `detector_enc_electrons` | detector response |
