@@ -23,34 +23,46 @@ tube:
   filters:                         # tube exit window and filters, thickness [mm]
     Be: 0.125                      # (not the detector window, be_window_mm below)
   energy_step_keV: 0.03            # spectrum bin width [keV]
-  current_mA: 0.002                # tube current [mA]; 0.002 reproduces the old
-                                   # spectrum_xraytube.txt run, set the real value
+  current_mA: 0.002                # tube current [mA]
 
 # ── Instrument geometry (cm) ───────────────────────────────────────────────
-# X-ray tube focal spot position
-# 30° from surface normal, 3 cm vertical height → x = -3·tan(30°) = -3/√3
+# The sample surface is the plane z = 0, the analysed spot is at the origin,
+# and z points up, away from the sample. The formulas below place tube and
+# detector in the x–z plane on opposite sides (tube at x < 0, detector at x > 0).
+#
+# From the lab measurements:
+#   θ = angle between the beam axis and the surface normal [deg]
+#   D = straight-line distance from the spot to the point [cm]
+#   x = ∓ D · sin θ   (− for the tube, + for the detector)
+#   z =   D · cos θ   (the height above the surface)
+# If you measured the height h instead of D:  x = ∓ h · tan θ,  z = h
+#
+# Tube: the point is the focal spot (for a transmission target, the target
+# just behind the exit window).
 src_x: -3.0
 src_y:  0.0
-src_z:  3.0       # 3 cm above sample surface, 30° from normal
+src_z:  3.0
 
-# SDD detector centre position
-# 45° from surface normal, 3 cm vertical height → x = 3·tan(45°) = 3 cm
-# source-to-detector distance = 1.7321 + 3.0 = 4.7321 cm
+# Detector: the point is the centre of the Si crystal, behind its window.
 det_x:  3.0
 det_y:  0.0
-det_z:  3.0       # 3 cm above sample surface, 45° from normal
+det_z:  3.0
 
-# Detector inward normal (unit vector pointing FROM detector TOWARD sample)
-# Pointed at sample origin, consistent with 45° geometry
-det_normal: [-0.707, 0.0, -0.707]   # will be normalised in code
+# Detector inward normal (pointing FROM the detector TOWARD the sample).
+# If the detector points at the spot: [-det_x, -det_y, -det_z]
+# (the code normalises it).
+det_normal: [-0.707, 0.0, -0.707]
 
-# Detector active area (cm²)
-det_area: 0.17    # 50 mm² = 0.50 cm² SDD
+# Detector active area [cm²]: the collimated area from the datasheet,
+# mm² / 100 (e.g. 17 mm² → 0.17).
+det_area: 0.17
 
 # ── Grid definition (cm) ──────────────────────────────────────────────────
-# The grid covers the sample region you want to integrate over.
-# Make it large enough to include all illuminated area that the
-# detector can see. Start coarse (10×10) for testing.
+# The code has no beam-footprint model yet (review problem 6), so the grid
+# IS the illuminated area: set it to the beam spot on the sample
+# (e.g. a 0.8 × 0.8 cm spot → min −0.4, max 0.4).
+# 2×2 points is within 0.25% of a fine grid for a ±0.4 cm grid at 45°;
+# check against a finer grid when the geometry changes.
 grid_x_min: -0.4
 grid_x_max:  0.4
 grid_n_x:    2
@@ -60,7 +72,7 @@ grid_y_max:  0.4
 grid_n_y:    2
 
 # ── Detector response ────────────────────────────────────────────────────────
-be_window_mm:           0.125   # Be entrance window thickness [mm]
+be_window_mm:           0.125   # Be entrance window thickness [mm], from the datasheet (12.5 µm = 0.0125)
 si_active_layer_um:     450.0   # Active Si crystal thickness [µm] — sets high-E quantum efficiency
 detector_fano:          0.115   # Fano factor for silicon (fixed)
 detector_enc_electrons: 8.0     # Electronic noise [electrons equivalent] — adjust by calibration
