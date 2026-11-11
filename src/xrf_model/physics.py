@@ -12,14 +12,14 @@ def _build_l_lines():
         ("Lα1",  "LA1_LINE",  2),   # L3 → M5
         ("Lα2",  "LA2_LINE",  2),   # L3 → M4
         ("Lβ1",  "LB1_LINE",  1),   # L2 → M4
-        ("Lβ2",  "LB2_LINE",  2),   # L3 → N4,5
-        ("Lβ3",  "LB3_LINE",  0),   # L1 → M2,3
+        ("Lβ2",  "LB2_LINE",  2),   # L3 → N5
+        ("Lβ3",  "LB3_LINE",  0),   # L1 → M3
         ("Lβ4",  "LB4_LINE",  0),   # L1 → M2
         ("Lβ15", "LB15_LINE", 2),   # L3 → N4
         ("Lβ17", "LB17_LINE", 1),   # L2 → M3
         ("Lγ1",  "LG1_LINE",  1),   # L2 → N4
-        ("Lγ2",  "LG2_LINE",  0),   # L1 → N2,3
-        ("Lγ3",  "LG3_LINE",  0),   # L1 → N1
+        ("Lγ2",  "LG2_LINE",  0),   # L1 → N2
+        ("Lγ3",  "LG3_LINE",  0),   # L1 → N3
         ("Ll",   "LL_LINE",   2),   # L3 → M1
     ]
     return [
@@ -326,7 +326,8 @@ def precompute_anomalous_factors(energy_array, param_dict):
 def compute_coherent_cross_section(energy_array, scattering_angle, param_dict, conc,
                                    anomalous_cache=None):
     """
-    Coherent (Rayleigh) scattering cross section of the sample mixture [cm²/g].
+    Coherent (Rayleigh) differential cross section dσ/dΩ of the sample mixture
+    at the given scattering angle [cm²/g/sr].
 
     anomalous_cache: output of precompute_anomalous_factors — pass it from the
                      grid loop to avoid recomputing f1/f2 per cell.

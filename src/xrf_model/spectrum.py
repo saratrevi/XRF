@@ -190,7 +190,8 @@ def build_spectrum(
     if I_incoherent is not None:
         continuum = continuum + I_incoherent
 
-    # Continuum: apply Be transmission, smear with detector resolution, then QE
+    # Continuum: apply Be transmission and Si efficiency, then smear with the
+    # detector resolution
     continuum_pre = continuum * T * QE
     spectrum = _smear_continuum(energy_grid, continuum_pre, fano, noise_ev, w_ev)
 

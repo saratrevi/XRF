@@ -42,11 +42,14 @@ class GridGeometry:
         """
         Returns per-grid-point arrays (shape n_y × n_x):
 
-        sinPhi    : sinΦ = z_src/R_src  (incidence angle from surface normal)
-        sinPsi    : sinΨ = z_det/R_det  (emission angle from surface normal)
+        sinPhi    : sinΦ = z_src/R_src  (Φ = incidence angle measured from the
+                    sample surface, so sinΦ = cos of the angle from the normal)
+        sinPsi    : sinΨ = z_det/R_det  (Ψ = emission angle from the surface)
         R_src     : source-to-point distance (cm)
         R_det     : point-to-detector distance (cm)
-        Omega     : exact solid angle of detector (sr), using 2π(1−cosα)
+        Omega     : solid angle of the detector (sr), 2π(1−cosα) × tilt cosine:
+                    exact for a point on the detector axis, approximate off it
+                    (a small error for a detector a few cm away)
         valid     : bool — True where point can be seen by both source and detector
         """
         # Source vectors (z_src is scalar, same for all grid points)
@@ -69,7 +72,7 @@ class GridGeometry:
         cos_det = -(dx_d * self.n_det[0] + dy_d * self.n_det[1] + dz_d * self.n_det[2]) / R_det
         cos_det = np.clip(cos_det, 0.0, 1.0)
 
-        # Exact solid angle with detector tilt projection.
+        # Solid angle of the detector disk (exact on its axis) with the tilt projection.
         # 2π(1−cosα) is the face-on solid angle; multiplying by cos_det gives
         # the effective solid angle for a tilted detector face.
         alpha = np.arctan(self.r_det_radius / R_det)

@@ -19,8 +19,13 @@ can be opened directly in **PyMCA**.
 - **Incoherent (Compton) scattering** via Klein–Nishina × incoherent scatter
   function, Doppler-broadened with the sample's shell Compton profiles
   (impulse approximation, binding-energy cutoffs)
-- **Detector response** — Be entrance-window transmission, active-Si quantum
-  efficiency, and Fano + electronic-noise Gaussian broadening (SDD)
+- **Source** — an X-ray tube spectrum generated with SpekPy (`tube:` block),
+  or a spectrum read from a file
+- **Air** between tube, sample and detector (`atmosphere: air`), or vacuum
+- **Detector response** — Be entrance-window transmission, Si efficiency, and
+  Fano + electronic-noise broadening; with an optional Monte Carlo response
+  matrix (`detector_response:`) for escape peaks, the low-energy shelf and
+  Compton events in the Si, otherwise pure Gaussian peaks
 - **Geometry** — a 2D grid over the sample surface, with per-point source/detector
   distances, incidence/emission angles, and detector solid angle
 

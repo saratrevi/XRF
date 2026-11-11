@@ -105,11 +105,13 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
     Spatially-resolved K + L fluorescence using a 2D surface grid.
 
     Implements:
-        I_det(ip) = Σ_{m,n}  dΩ/(4π) · ΔS
-                    · ∫ Q_ip(E) φ(E,r_mn) / [μ(E)/sinΦ + μ(ip)/sinΨ] dE
+        I_det(ip) = Σ_{m,n}  Ω_mn/(4π) · ΔS
+                    · ∫ Q_ip(E) φ(E,r_mn) / [μ(E) + (sinΦ_mn/sinΨ_mn) · μ(ip)] dE
 
     where φ(E, r_mn) = P(E) · sinΦ_mn / R_src_mn², with R_src_mn the
     straight-line distance from the focal spot to the point (not the height).
+    The sinΦ in φ and the one in the denominator cancel to the usual
+    (P/R²) / [μ(E)/sinΦ + μ(ip)/sinΨ].
 
     Atmosphere
     ----------
