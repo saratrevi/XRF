@@ -21,7 +21,6 @@ from .physics import (
     compute_coherent_cross_section,
     compute_incoherent_cross_section,
     precompute_anomalous_factors,
-    _L_LINES,
 )
 from .geometry import GridGeometry
 from .tube import tube_source_term
@@ -58,6 +57,25 @@ def _k_group(Z: int, line_attr_names: list) -> tuple:
             total += r
             e_sum += r * e
     return (e_sum / total if total > 0 else 0.0), total
+
+
+def _k_shell_params(Z: int) -> dict | None:
+    """
+    K-shell edge [keV], fluorescence yield and absorption-jump factor of Z.
+
+    Returns None if xraylib has no K-shell data for Z (it raises ValueError,
+    e.g. for H) or the values cannot give K lines.  Any other error is a real
+    problem and is not caught.
+    """
+    try:
+        E_edge = xraylib.EdgeEnergy(Z, xraylib.K_SHELL)
+        wK = xraylib.FluorYield(Z, xraylib.K_SHELL)
+        jump_r = xraylib.JumpFactor(Z, xraylib.K_SHELL)
+    except ValueError:
+        return None
+    if E_edge <= 0 or wK <= 0 or jump_r <= 1.0:
+        return None
+    return {"E_edge": E_edge, "wK": wK, "R_jump": 1.0 - 1.0 / jump_r}   # (r-1)/r
 
 
 # Individual K lines: (display name, xraylib attribute name)
@@ -181,27 +199,26 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     element_properties = ElementProperties(cfg, active_elements)
 
     # ── K-shell atomic parameters (xraylib, precomputed once per element) ─────
-    # Elements that lack valid K-shell data in xraylib are silently skipped.
+    # Elements without K-shell data in xraylib (e.g. H) get no lines; they are
+    # named in the output and still count in the attenuation and scattering.
     k_params: dict = {}
+    no_k_data = []
     for el in active_elements:
         Z = element_properties.param_dict[el]["Atomic Number"]
-        try:
-            E_edge = xraylib.EdgeEnergy(Z, xraylib.K_SHELL)
-            wK     = xraylib.FluorYield(Z, xraylib.K_SHELL)
-            jump_r = xraylib.JumpFactor(Z, xraylib.K_SHELL)
-        except Exception:
+        shell = _k_shell_params(Z)
+        if shell is None:
+            no_k_data.append(el)
             continue
-        if E_edge <= 0 or wK <= 0 or jump_r <= 1.0:
-            continue
-        R_jump = 1.0 - 1.0 / jump_r   # (r-1)/r  absorption jump factor
 
         # Individual lines for this element's own K emission; the Kα and Kβ
         # groups are kept only for its role as an exciter of other elements.
         E_Ka, P_Ka = _k_group(Z, ["KA1_LINE", "KA2_LINE"])
         E_Kb, P_Kb = _k_group(Z, ["KB1_LINE", "KB2_LINE", "KB3_LINE"])
-        k_params[el] = dict(Z=Z, E_edge=E_edge, wK=wK, R_jump=R_jump,
+        k_params[el] = dict(Z=Z, **shell,
                             E_Ka=E_Ka, P_Ka=P_Ka, E_Kb=E_Kb, P_Kb=P_Kb,
                             lines=_k_lines(Z))
+    if no_k_data:
+        print(f"No K-shell data in xraylib, no lines computed for: {', '.join(no_k_data)}")
 
     # L-line cross sections (with Coster-Kronig and K→L cascade) depend only on
     # Z and E: compute once per element, reuse in every cell and sample.
@@ -442,22 +459,17 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     "Intensity_ph_s": line_totals.get((el, line["name"]), 0.0),
                 })
 
-            # L lines — only emit rows for lines that were actually computed
-            for line_name, line_const, _ in _L_LINES:
-                key = (el, line_name)
+            # L lines — energy and rate as already found by l_line_cross_sections
+            for line in l_lines_by_el[el]:
+                key = (el, line["line_name"])
                 if key not in line_totals:
                     continue
-                try:
-                    E_line   = xraylib.LineEnergy(Z, line_const)
-                    rad_rate = xraylib.RadRate(Z, line_const)
-                except Exception:
-                    E_line, rad_rate = np.nan, np.nan
                 rows.append({
                     "Element":        el,
                     "Concentration":  w,
-                    "Line":           line_name,
-                    "E_line_keV":     E_line,
-                    "P_line":         rad_rate,
+                    "Line":           line["line_name"],
+                    "E_line_keV":     line["E_line"],
+                    "P_line":         line["rad_rate"],
                     "Intensity_ph_s": line_totals[key],
                 })
 
