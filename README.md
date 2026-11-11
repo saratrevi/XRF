@@ -46,7 +46,9 @@ Other keys in the file (for example `source:` or `notes:`) are ignored.
 
 With a `tube:` block (as in `lab_xrf.yml`) the spectrum is computed at run time
 from the tube settings (voltage, target, window, current) and no flux file is
-passed. `data/flux/spectrum_xraytube.txt` is the same tube spectrum at 0.002 mA,
+passed. The SpekPy result is saved in `.cache/tube/` (git-ignored), one file per
+set of tube settings, so later runs with the same tube skip SpekPy (about 7 s);
+a different current reuses the same file. Deleting the folder clears the cache. `data/flux/spectrum_xraytube.txt` is the same tube spectrum at 0.002 mA,
 kept as a reference for the tests.
 
 A flux file gives `ph/cm²/s/keV` on the beam axis at the distance

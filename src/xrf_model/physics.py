@@ -71,7 +71,7 @@ class ElementProperties:
 def compute_k_fluorescence(
     energy_array,
     flux_array,
-    Z,
+    cs_photo,
     sinPhi,
     sinPsi,
     total_atten_sample_array,
@@ -87,6 +87,8 @@ def compute_k_fluorescence(
     flux_array must already contain the sinΦ factor (φ = P·sinΦ/R²), so that
     the denominator recovers μ(E)/sinΦ + μ_line/sinΨ after cancellation.
 
+    cs_photo       : CS_Photo(Z, E) of the analyte on energy_array [cm²/g],
+                     computed once per run (it does not depend on the cell).
     sinPhi, sinPsi : per-cell sinΦ and sinΨ from GridGeometry — required,
                      no cfg fallback.
     """
@@ -95,7 +97,7 @@ def compute_k_fluorescence(
         return 0.0
     E_sub     = energy_array[mask]
     flux_sub  = flux_array[mask]
-    mu_ph     = np.array([xraylib.CS_Photo(Z, E) for E in E_sub])
+    mu_ph     = cs_photo[mask]
     mu_tot_E  = total_atten_sample_array[mask]
     denom     = mu_tot_E + (sinPhi / sinPsi) * total_atten_sample_at_line
     integrand = np.where(denom > 0.0, flux_sub * mu_ph / denom, 0.0)

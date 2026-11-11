@@ -157,7 +157,10 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
             raise ValueError("The config has a `tube:` block, so the spectrum is "
                              "generated: pass flux_file=None, or remove the "
                              "block to use the file.")
-        energy_kev, P_eff = tube_source_term(tube_cfg)   # ph/s/keV/sr
+        # SpekPy spectra are cached in <repo>/.cache/tube (git-ignored)
+        cache_dir = (Path(cfg["_repo_root"]) / ".cache" / "tube"
+                     if cfg.get("_repo_root") else None)
+        energy_kev, P_eff = tube_source_term(tube_cfg, cache_dir)   # ph/s/keV/sr
         run_name = f"tube_{float(tube_cfg['kvp']):g}kV_{tube_cfg['target']}"
     elif flux_file is None:
         raise ValueError("No source spectrum: pass a flux file or add a "
@@ -224,14 +227,11 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
     # Secondary fluorescence toggle (default on)
     include_secondary = bool(cfg.get("include_secondary", True))
 
-    # CS_Photo(Z, E) over the beam grid — depends only on Z & E (not sample),
-    # so precompute once and reuse for the secondary-fluorescence integral.
-    cs_photo_cache: dict = {}
-    if include_secondary:
-        for el, kp in k_params.items():
-            Z = kp["Z"]
-            cs_photo_cache[el] = np.array([xraylib.CS_Photo(Z, E)
-                                           for E in energy_kev])
+    # CS_Photo(Z, E) over the beam grid — depends only on Z & E (not on the
+    # sample or the cell), so compute it once per run and reuse it in every
+    # cell for the primary and secondary K-fluorescence integrals.
+    cs_photo_cache = {el: np.array([xraylib.CS_Photo(kp["Z"], E) for E in energy_kev])
+                      for el, kp in k_params.items()}
 
     # ── Grid geometry ─────────────────────────────────────────────────────────
     geo = GridGeometry(cfg)
@@ -405,7 +405,6 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
                     if w <= 0:
                         continue
 
-                    Z = kp["Z"]
                     exciters = exc_by_analyte.get(el) if include_secondary else None
 
                     # K lines, each at its own energy (Kα1, Kα2, Kβ1, Kβ3, Kβ2):
@@ -414,7 +413,7 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
                     for line in kp["lines"]:
                         mu_line = mu_at_line(line["E"])
                         raw = compute_k_fluorescence(
-                            energy_kev, phi_mn, Z, sinPhi, sinPsi,
+                            energy_kev, phi_mn, cs_photo_cache[el], sinPhi, sinPsi,
                             sample_mu, mu_line, kp["E_edge"],
                         )
                         if exciters:
@@ -442,7 +441,6 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
         rows = []
         for el, kp in k_params.items():
             w = sample_conc.get(el, 0.0)
-            Z = kp["Z"]
 
             # K lines, one row per line
             for line in kp["lines"]:
