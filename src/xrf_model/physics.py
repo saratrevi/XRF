@@ -31,6 +31,26 @@ def _build_l_lines():
 _L_LINES = _build_l_lines()
 
 
+# ── Sample attenuation ────────────────────────────────────────────────────────
+
+def mass_attenuation(param_dict, conc, energy):
+    """
+    Sample mass attenuation coefficient μ/ρ [cm²/g] at one energy or an array
+    of energies [keV]:  Σ_j w_j · CS_Total(Z_j, E), straight from xraylib.
+
+    Used both for the beam grid and at the exact energy of each line, so a
+    line next to an absorption edge, or outside the beam grid, gets its own
+    value instead of one interpolated across the edge.
+    """
+    E = np.atleast_1d(np.asarray(energy, dtype=float))
+    mu = np.zeros_like(E)
+    for el, w in conc.items():
+        if w > 0:
+            Z = param_dict[el]["Atomic Number"]
+            mu += w * np.array([xraylib.CS_Total(Z, float(e)) for e in E])
+    return mu if np.ndim(energy) else float(mu[0])
+
+
 # ── Element properties ────────────────────────────────────────────────────────
 
 class ElementProperties:
@@ -127,13 +147,14 @@ def compute_l_fluorescence(
     sinPhi,
     sinPsi,
     total_atten_sample_array,
-    f_atten_interp,
+    mu_at_line,
     l_lines,
 ):
     """
     L-shell fluorescence, including Coster-Kronig and the K→L cascade.
 
     sinPhi, sinPsi : per-cell sinΦ and sinΨ from GridGeometry.
+    mu_at_line     : function E [keV] → sample μ/ρ [cm²/g] at that exact energy.
     l_lines        : this element's lines from l_line_cross_sections.
 
     Returns a list of dicts — one per line:
@@ -144,7 +165,7 @@ def compute_l_fluorescence(
     geom = sinPhi / sinPsi
     rows = []
     for line in l_lines:
-        denom = total_atten_sample_array + geom * float(f_atten_interp(line["E_line"]))
+        denom = total_atten_sample_array + geom * float(mu_at_line(line["E_line"]))
         I_raw = np.trapezoid(
             np.where(denom > 0.0, flux_array * line["sigma"] / denom, 0.0),
             x=energy_array,

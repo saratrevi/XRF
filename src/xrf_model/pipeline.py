@@ -1,11 +1,11 @@
 # src/xrf_model/pipeline.py
 from __future__ import annotations
 
+from functools import lru_cache, partial
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import xraylib
-from scipy.interpolate import interp1d
 
 from .io import load_flux_data
 from .output import save_mca
@@ -17,6 +17,7 @@ from .physics import (
     compute_k_secondary_fluorescence,
     compute_l_fluorescence,
     l_line_cross_sections,
+    mass_attenuation,
     compute_coherent_cross_section,
     compute_incoherent_cross_section,
     precompute_anomalous_factors,
@@ -259,17 +260,13 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
         sample_conc = concentrations[conc]
 
-        # Sample total mass attenuation μ(E)/ρ  [cm²/g]
-        # Σ_j  w_j · CS_Total(Z_j, E)
-        sample_mu = np.zeros_like(energy_kev, dtype=float)
-        for el_name, w in sample_conc.items():
-            if w > 0:
-                Z_el = element_properties.param_dict[el_name]["Atomic Number"]
-                sample_mu += w * np.array([xraylib.CS_Total(Z_el, E)
-                                           for E in energy_kev])
-
-        f_mu_interp = interp1d(energy_kev, sample_mu,
-                               bounds_error=False, fill_value="extrapolate")
+        # Sample total mass attenuation μ(E)/ρ  [cm²/g]: Σ_j  w_j · CS_Total(Z_j, E)
+        # on the beam grid, and at the exact energy of each line (cached),
+        # never interpolated across an absorption edge or outside the grid.
+        sample_mu = mass_attenuation(element_properties.param_dict, sample_conc,
+                                     energy_kev)
+        mu_at_line = lru_cache(maxsize=None)(
+            partial(mass_attenuation, element_properties.param_dict, sample_conc))
 
         # Compton profile of this sample (shape of the Doppler broadening)
         compton_profile = sample_profile(element_properties.param_dict, sample_conc)
@@ -293,7 +290,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     exciter_master.append(dict(
                         element   = el_B,
                         E_line_B  = E_line,
-                        mu_B      = float(f_mu_interp(E_line)),
+                        mu_B      = mu_at_line(E_line),
                         E_edge_B  = kp_B["E_edge"],
                         yield_B   = w_B * kp_B["wK"] * kp_B["R_jump"] * P_line,
                         cs_photo_B= cs_photo_cache[el_B],
@@ -402,7 +399,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     # primary + secondary (inter-element) fluorescence, with the
                     # multiplier cell_factor · T_line · w · ωK · R_jump · p_line.
                     for line in kp["lines"]:
-                        mu_line = float(f_mu_interp(line["E"]))
+                        mu_line = mu_at_line(line["E"])
                         raw = compute_k_fluorescence(
                             energy_kev, phi_mn, Z, sinPhi, sinPsi,
                             sample_mu, mu_line, kp["E_edge"],
@@ -421,7 +418,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                     # L-shell (all lines with non-zero rate for this Z)
                     for r in compute_l_fluorescence(
                         energy_kev, phi_mn, sinPhi, sinPsi,
-                        sample_mu, f_mu_interp, l_lines_by_el[el],
+                        sample_mu, mu_at_line, l_lines_by_el[el],
                     ):
                         key = (el, r["line_name"])
                         T_L = np.exp(-float(mu_air(r["E_line"])) * L_out)
