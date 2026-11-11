@@ -99,7 +99,7 @@ def _k_lines(Z: int) -> list:
     return lines
 
 
-def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
+def run_one_grid(flux_file, cfg: dict) -> dict:
     """
     Spatially-resolved K + L fluorescence using a 2D surface grid.
 
@@ -196,7 +196,7 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     ]
     print(f"Active elements: {active_elements}")
 
-    element_properties = ElementProperties(cfg, active_elements)
+    element_properties = ElementProperties(active_elements)
 
     # ── K-shell atomic parameters (xraylib, precomputed once per element) ─────
     # Elements without K-shell data in xraylib (e.g. H) get no lines; they are

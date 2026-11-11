@@ -50,8 +50,6 @@ def load_config(yaml_path: str | Path) -> dict:
     paths = cfg.get("paths", {})
     cfg["paths"] = {
         "element_data": str((root / paths["element_data"]).resolve()),
-        "form_factors": str((root / paths["form_factors"]).resolve()),
-        "absorption_dir": str((root / paths["absorption_dir"]).resolve()),
         "output_dir": str((root / paths["output_dir"]).resolve()),
     }
 

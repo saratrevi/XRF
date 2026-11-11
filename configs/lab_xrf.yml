@@ -3,8 +3,6 @@
 
 paths:
   element_data:   data/element_params/Data_keV.xlsx
-  form_factors:   data/form_factors/form_factor_coherent_scatter.xlsx
-  absorption_dir: data/absorption_coeffs
   output_dir:     results/lab_xrf
 
 concentration_cols: ["soil_14163"]

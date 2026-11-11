@@ -35,7 +35,6 @@ All distances are in **cm**; cross-sections are in **cm²/g**.
 |-------|----------|-------|
 | Excitation spectrum | `tube:` block in the config, or `data/flux/*.qdp` | X-ray tube spectrum generated with [SpekPy](https://bitbucket.org/spekpy/spekpy_release), or flare spectra from a file |
 | Sample compositions | `data/element_params/Data_keV.xlsx` | element rows, one column per sample; used for concentrations |
-| Coherent form factors | `data/form_factors/form_factor_coherent_scatter.xlsx` | anomalous scattering factors |
 | Instrument config | `configs/*.yml` | `lab_xrf.yml` |
 
 With a `tube:` block (as in `lab_xrf.yml`) the spectrum is computed at run time
@@ -73,15 +72,13 @@ For each sample column, results are written under `results/<config>/<run>_grid/`
 ```
 configs/                 YAML instrument configs (paths, geometry, detector, samples)
 data/
-  absorption_coeffs/     per-element mass-attenuation .txt files
   element_params/        Data_keV.xlsx  (compositions)
-  form_factors/          coherent-scatter form factors
   flux/                  excitation spectra (*.qdp, spectrum_xraytube.txt)
 notebooks/
   xrf.ipynb              end-to-end example + plots
 src/xrf_model/
   config.py              load_config, repo-root resolution
-  io.py                  flux / attenuation / form-factor loaders
+  io.py                  flux-spectrum loader
   tube.py                X-ray tube spectrum generated with SpekPy
   geometry.py            GridGeometry — surface grid, angles, solid angle
   atmosphere.py          air absorption between tube, sample and detector
@@ -132,7 +129,7 @@ from xrf_model.pipeline import run_one_grid
 cfg = load_config("configs/lab_xrf.yml")
 
 # lab_xrf.yml has a `tube:` block, so no flux file is passed
-results = run_one_grid(None, cfg, debugging=True)
+results = run_one_grid(None, cfg)
 # → writes .xlsx / .dat / .mca / .png under results/lab_xrf/tube_50kV_Ag_grid/
 
 # for a spectrum from a file (config without a `tube:` block):

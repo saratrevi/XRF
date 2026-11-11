@@ -54,10 +54,9 @@ def mass_attenuation(param_dict, conc, energy):
 # ── Element properties ────────────────────────────────────────────────────────
 
 class ElementProperties:
-    """Stores per-element atomic numbers/masses (from xraylib) and the run config."""
+    """Stores per-element atomic numbers and masses (from xraylib)."""
 
-    def __init__(self, cfg: dict, elements: list):
-        self.cfg = cfg
+    def __init__(self, elements: list):
         self.param_dict = {}
         for el in elements:
             Z = xraylib.SymbolToAtomicNumber(el)
