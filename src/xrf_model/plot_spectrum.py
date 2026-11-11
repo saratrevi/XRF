@@ -4,6 +4,7 @@ Plotting helper for the simulated XRF detector spectrum.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 
 def plot_and_save_spectrum(energy_kev, spectrum, df_fluo, out_path, conc_label: str,
@@ -47,6 +48,18 @@ def plot_and_save_spectrum(energy_kev, spectrum, df_fluo, out_path, conc_label: 
     if not visible.empty:
         i_max = visible["Intensity_ph_s"].max()
         visible = visible[visible["Intensity_ph_s"] >= INTENSITY_THRESHOLD * i_max]
+
+    # One label per peak: lines of the same element closer than
+    # LABEL_MERGE_KEV (e.g. Kα1/Kα2) get only the strongest line's label.
+    LABEL_MERGE_KEV = 0.1
+    kept = []
+    for _, row in visible.sort_values("Intensity_ph_s", ascending=False).iterrows():
+        if not any(k["Element"] == row["Element"]
+                   and abs(k["E_line_keV"] - row["E_line_keV"]) < LABEL_MERGE_KEV
+                   for k in kept):
+            kept.append(row)
+    visible = (pd.DataFrame(kept).sort_values("E_line_keV") if kept
+               else visible.iloc[0:0])
 
     label_y_positions = [y_min * 4.0, y_min * 60.0]
     for i, (_, row) in enumerate(visible.iterrows()):

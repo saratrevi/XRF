@@ -35,8 +35,12 @@ def _k_group(Z: int, line_attr_names: list) -> tuple:
     """
     Energy-weighted mean line energy and total branching fraction for a K-line group.
 
+    Used only for an element's role as an exciter in secondary fluorescence,
+    where splitting the group changes almost nothing (it would matter only if
+    a group straddled the absorption edge of the excited element).
+
     line_attr_names: list of xraylib attribute name strings, e.g. ["KA1_LINE", "KA2_LINE"].
-    Lines absent from the installed xraylib version are silently skipped.
+    Lines absent from the installed xraylib version are skipped.
     Returns (mean_energy_keV, total_branching_fraction).
     """
     total, e_sum = 0.0, 0.0
@@ -47,12 +51,33 @@ def _k_group(Z: int, line_attr_names: list) -> tuple:
         try:
             r = xraylib.RadRate(Z, lc)
             e = xraylib.LineEnergy(Z, lc)
-            if r > 0 and e > 0:
-                total += r
-                e_sum += r * e
-        except Exception:
-            pass
+        except ValueError:            # line not tabulated for this element
+            continue
+        if r > 0 and e > 0:
+            total += r
+            e_sum += r * e
     return (e_sum / total if total > 0 else 0.0), total
+
+
+# Individual K lines: (display name, xraylib attribute name)
+_K_LINES = [("Kα1", "KA1_LINE"), ("Kα2", "KA2_LINE"),
+            ("Kβ1", "KB1_LINE"), ("Kβ3", "KB3_LINE"), ("Kβ2", "KB2_LINE")]
+
+
+def _k_lines(Z: int) -> list:
+    """K lines of element Z as dicts name, E [keV], P (radiative rate); missing lines skipped."""
+    lines = []
+    for name, attr in _K_LINES:
+        lc = getattr(xraylib, attr, None)
+        if lc is None:
+            continue
+        try:
+            E, P = xraylib.LineEnergy(Z, lc), xraylib.RadRate(Z, lc)
+        except ValueError:            # line not tabulated for this element
+            continue
+        if E > 0 and P > 0:
+            lines.append({"name": name, "E": E, "P": P})
+    return lines
 
 
 def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
@@ -169,10 +194,13 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
             continue
         R_jump = 1.0 - 1.0 / jump_r   # (r-1)/r  absorption jump factor
 
+        # Individual lines for this element's own K emission; the Kα and Kβ
+        # groups are kept only for its role as an exciter of other elements.
         E_Ka, P_Ka = _k_group(Z, ["KA1_LINE", "KA2_LINE"])
         E_Kb, P_Kb = _k_group(Z, ["KB1_LINE", "KB2_LINE", "KB3_LINE"])
         k_params[el] = dict(Z=Z, E_edge=E_edge, wK=wK, R_jump=R_jump,
-                            E_Ka=E_Ka, P_Ka=P_Ka, E_Kb=E_Kb, P_Kb=P_Kb)
+                            E_Ka=E_Ka, P_Ka=P_Ka, E_Kb=E_Kb, P_Kb=P_Kb,
+                            lines=_k_lines(Z))
 
     # L-line cross sections (with Coster-Kronig and K→L cascade) depend only on
     # Z and E: compute once per element, reuse in every cell and sample.
@@ -210,9 +238,8 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
     response = load_response(response_cfg["file"]) if response_cfg else None
 
     for kp in k_params.values():
-        # E = 0 means the line does not exist for this element (e.g. Kβ of O)
-        kp["mu_air_Ka"] = float(mu_air(kp["E_Ka"])) if kp["E_Ka"] > 0 else 0.0
-        kp["mu_air_Kb"] = float(mu_air(kp["E_Kb"])) if kp["E_Kb"] > 0 else 0.0
+        for line in kp["lines"]:
+            line["mu_air"] = float(mu_air(line["E"]))
 
     out_dir = Path(cfg["paths"]["output_dir"]) / (run_name + "_grid")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -369,60 +396,27 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
                         continue
 
                     Z = kp["Z"]
-
-                    # Air transmission on the way to the detector, per line
-                    T_Ka = np.exp(-kp["mu_air_Ka"] * L_out)
-                    T_Kb = np.exp(-kp["mu_air_Kb"] * L_out)
-
-                    # K-alpha (KA1 + KA2 group)
-                    if kp["E_Ka"] > 0 and kp["P_Ka"] > 0:
-                        mu_Ka = float(f_mu_interp(kp["E_Ka"]))
-                        raw   = compute_k_fluorescence(
-                            energy_kev, phi_mn, Z, sinPhi, sinPsi,
-                            sample_mu, mu_Ka, kp["E_edge"],
-                        )
-                        key = (el, "Ka")
-                        line_totals[key] = (line_totals.get(key, 0.0)
-                                            + cell_factor * T_Ka * raw * w
-                                            * kp["wK"] * kp["R_jump"] * kp["P_Ka"])
-
-                    # K-beta (KB1 + KB2 + KB3 group)
-                    if kp["E_Kb"] > 0 and kp["P_Kb"] > 0:
-                        mu_Kb = float(f_mu_interp(kp["E_Kb"]))
-                        raw   = compute_k_fluorescence(
-                            energy_kev, phi_mn, Z, sinPhi, sinPsi,
-                            sample_mu, mu_Kb, kp["E_edge"],
-                        )
-                        key = (el, "Kb")
-                        line_totals[key] = (line_totals.get(key, 0.0)
-                                            + cell_factor * T_Kb * raw * w
-                                            * kp["wK"] * kp["R_jump"] * kp["P_Kb"])
-
-                    # Secondary (inter-element) K fluorescence — adds into the
-                    # same Kα/Kβ accumulators with the identical A-side
-                    # multiplier (cell_factor · T_line · w · ωK · R_jump · p_line).
                     exciters = exc_by_analyte.get(el) if include_secondary else None
-                    if exciters:
-                        if kp["E_Ka"] > 0 and kp["P_Ka"] > 0:
-                            mu_Ka = float(f_mu_interp(kp["E_Ka"]))
-                            raw_s = compute_k_secondary_fluorescence(
+
+                    # K lines, each at its own energy (Kα1, Kα2, Kβ1, Kβ3, Kβ2):
+                    # primary + secondary (inter-element) fluorescence, with the
+                    # multiplier cell_factor · T_line · w · ωK · R_jump · p_line.
+                    for line in kp["lines"]:
+                        mu_line = float(f_mu_interp(line["E"]))
+                        raw = compute_k_fluorescence(
+                            energy_kev, phi_mn, Z, sinPhi, sinPsi,
+                            sample_mu, mu_line, kp["E_edge"],
+                        )
+                        if exciters:
+                            raw += compute_k_secondary_fluorescence(
                                 energy_kev, phi_mn, sinPhi, sinPsi,
-                                sample_mu, mu_Ka, kp["E_edge"], exciters,
+                                sample_mu, mu_line, kp["E_edge"], exciters,
                             )
-                            key = (el, "Ka")
-                            line_totals[key] = (line_totals.get(key, 0.0)
-                                                + cell_factor * T_Ka * raw_s * w
-                                                * kp["wK"] * kp["R_jump"] * kp["P_Ka"])
-                        if kp["E_Kb"] > 0 and kp["P_Kb"] > 0:
-                            mu_Kb = float(f_mu_interp(kp["E_Kb"]))
-                            raw_s = compute_k_secondary_fluorescence(
-                                energy_kev, phi_mn, sinPhi, sinPsi,
-                                sample_mu, mu_Kb, kp["E_edge"], exciters,
-                            )
-                            key = (el, "Kb")
-                            line_totals[key] = (line_totals.get(key, 0.0)
-                                                + cell_factor * T_Kb * raw_s * w
-                                                * kp["wK"] * kp["R_jump"] * kp["P_Kb"])
+                        T_line = np.exp(-line["mu_air"] * L_out)   # air to the detector
+                        key = (el, line["name"])
+                        line_totals[key] = (line_totals.get(key, 0.0)
+                                            + cell_factor * T_line * raw * w
+                                            * kp["wK"] * kp["R_jump"] * line["P"])
 
                     # L-shell (all lines with non-zero rate for this Z)
                     for r in compute_l_fluorescence(
@@ -440,18 +434,15 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
             w = sample_conc.get(el, 0.0)
             Z = kp["Z"]
 
-            # K lines
-            for line_key, E_line, P_line, display in [
-                ("Ka", kp["E_Ka"], kp["P_Ka"], "Kα"),
-                ("Kb", kp["E_Kb"], kp["P_Kb"], "Kβ"),
-            ]:
+            # K lines, one row per line
+            for line in kp["lines"]:
                 rows.append({
                     "Element":        el,
                     "Concentration":  w,
-                    "Line":           display,
-                    "E_line_keV":     E_line if E_line > 0 else np.nan,
-                    "P_line":         P_line,
-                    "Intensity_ph_s": line_totals.get((el, line_key), 0.0),
+                    "Line":           line["name"],
+                    "E_line_keV":     line["E"],
+                    "P_line":         line["P"],
+                    "Intensity_ph_s": line_totals.get((el, line["name"]), 0.0),
                 })
 
             # L lines — only emit rows for lines that were actually computed

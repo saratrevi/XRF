@@ -10,7 +10,7 @@ can be opened directly in **PyMCA**.
 
 ## What it models
 
-- **Primary K fluorescence** (Kα, Kβ groups) via the Shiraiwa–Fujino integral
+- **Primary K fluorescence** (Kα1, Kα2, Kβ1, Kβ3, Kβ2, each at its own energy) via the Shiraiwa–Fujino integral
 - **Secondary (inter-element) K fluorescence** — enhancement of a lighter element
   by the lines of a heavier one (toggle `include_secondary`)
 - **L-shell fluorescence** (all L lines with non-zero radiative rate), with
