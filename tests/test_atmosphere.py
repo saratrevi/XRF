@@ -42,7 +42,7 @@ def one_cell(tmp_path_factory):
     base.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1,
                 atmosphere="vacuum", src_vacuum_path_cm=0.0, det_vacuum_path_cm=0.0)
     base["paths"] = dict(cfg["paths"], output_dir=str(tmp_path_factory.mktemp("air")))
-    sample = cfg["concentration_cols"][0]
+    sample = cfg["samples"][0]
 
     def run(**changes):
         return run_one_grid(TUBE_FILE, dict(base, **changes))[sample]

@@ -1,0 +1,15 @@
+# Sample A16: mass fraction of each element.
+composition:
+  O: 0.453224
+  Na: 0.003413
+  Mg: 0.034373
+  Al: 0.144487
+  Si: 0.210347
+  P: 0.00062
+  S: 0.0007
+  K: 0.001411
+  Ca: 0.112207
+  Ti: 0.003236
+  Cr: 0.002258
+  Mn: 0.001549
+  Fe: 0.041975

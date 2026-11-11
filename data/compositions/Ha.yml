@@ -1,0 +1,11 @@
+# Sample Ha: mass fraction of each element.
+composition:
+  O: 0.440946
+  Mg: 0.051259
+  Al: 0.072
+  Si: 0.216891
+  K: 0.00083
+  Ca: 0.080046
+  Ti: 0.015583
+  Mn: 0.002014
+  Fe: 0.130588

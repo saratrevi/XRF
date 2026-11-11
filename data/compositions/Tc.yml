@@ -1,0 +1,14 @@
+# Sample Tc: mass fraction of each element.
+composition:
+  O: 0.445433
+  Na: 0.001706
+  Mg: 0.120608
+  Al: 0.105322
+  Si: 0.200998
+  P: 0.000101
+  K: 0.000232
+  Ca: 0.077187
+  Ti: 0.0003
+  Cr: 0.000753
+  Mn: 0.000503
+  Fe: 0.038865

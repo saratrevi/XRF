@@ -34,8 +34,15 @@ All distances are in **cm**; cross-sections are in **cm²/g**.
 | Input | Location | Notes |
 |-------|----------|-------|
 | Excitation spectrum | `tube:` block in the config, or `data/flux/*.qdp` | X-ray tube spectrum generated with [SpekPy](https://bitbucket.org/spekpy/spekpy_release), or flare spectra from a file |
-| Sample compositions | `data/element_params/Data_keV.xlsx` | element rows, one column per sample; used for concentrations |
+| Sample compositions | `data/compositions/<sample>.yml` | one file per sample: the mass fraction of each element under `composition:` |
 | Instrument config | `configs/*.yml` | `lab_xrf.yml` |
+
+To add a sample, copy a file in `data/compositions/`, give it the sample's
+name, edit the fractions and add the name to `samples` in the config. Oxide
+analyses must be converted to element fractions first. Only the ratios between
+the fractions matter, so the sum need not be exactly 1; a known light component
+missing from the list (water, organic carbon) should be added as elements.
+Other keys in the file (for example `source:` or `notes:`) are ignored.
 
 With a `tube:` block (as in `lab_xrf.yml`) the spectrum is computed at run time
 from the tube settings (voltage, target, window, current) and no flux file is
@@ -72,7 +79,7 @@ For each sample column, results are written under `results/<config>/<run>_grid/`
 ```
 configs/                 YAML instrument configs (paths, geometry, detector, samples)
 data/
-  element_params/        Data_keV.xlsx  (compositions)
+  compositions/          one YAML file per sample (element mass fractions)
   flux/                  excitation spectra (*.qdp, spectrum_xraytube.txt)
 notebooks/
   xrf.ipynb              end-to-end example + plots
@@ -197,7 +204,7 @@ Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml
 | Field | Meaning |
 |-------|---------|
 | `paths.*` | input/output locations |
-| `concentration_cols` | which sample column(s) of `Data_keV.xlsx` to run |
+| `samples` | which sample file(s) in `paths.compositions` to run |
 | `include_secondary` | include inter-element secondary K fluorescence |
 | `tube.*` | X-ray tube for the SpekPy spectrum: `kvp`, `target`, `transmission_thickness_um`, `filters` (mm), `energy_step_keV`, `current_mA` |
 | `src_reference_distance_cm` | distance at which a flux file was evaluated (only without `tube:`); `flux_units` is optional, its only value is `ph_per_cm2_per_s_per_keV` |

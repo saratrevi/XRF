@@ -1,0 +1,16 @@
+# Sample mantle_mars: mass fraction of each element.
+composition:
+  O: 0.432
+  Na: 0.00438
+  Mg: 0.187
+  Al: 0.019
+  Si: 0.213
+  P: 0.00074
+  S: 0.00036
+  K: 0.00036
+  Ca: 0.0206
+  Ti: 0.00101
+  Cr: 0.006
+  Mn: 0.00288
+  Fe: 0.114
+  Ni: 0.00036

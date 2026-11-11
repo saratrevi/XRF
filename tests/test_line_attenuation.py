@@ -39,7 +39,7 @@ def ratios(tmp_path, flux_file, label):
     cfg = {k: v for k, v in cfg.items() if k not in local}
     cfg.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1, atmosphere="vacuum")
     cfg["paths"] = dict(cfg["paths"], output_dir=str(tmp_path / label))
-    f = run_one_grid(flux_file, cfg)[cfg["concentration_cols"][0]]["fluorescence"]
+    f = run_one_grid(flux_file, cfg)[cfg["samples"][0]]["fluorescence"]
     I = lambda el, line: float(f[(f.Element == el) & (f.Line == line)].Intensity_ph_s.iloc[0])
     return {"Al Kβ1/Kα1": I("Al", "Kβ1") / I("Al", "Kα1"),
             "Y Lβ17/Lα1": I("Y", "Lβ17") / I("Y", "Lα1")}

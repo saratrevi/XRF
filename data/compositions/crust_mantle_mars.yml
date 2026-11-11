@@ -1,0 +1,16 @@
+# Sample crust_mantle_mars: mass fraction of each element.
+composition:
+  O: 0.461
+  Na: 0.008
+  Mg: 0.158
+  Al: 0.026
+  Si: 0.214
+  P: 0.0014
+  S: 0.006
+  K: 0.001
+  Ca: 0.026
+  Ti: 0.002
+  Cr: 0.005
+  Mn: 0.0029
+  Fe: 0.118
+  Ni: 0.0003

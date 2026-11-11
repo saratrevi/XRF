@@ -2,10 +2,12 @@
 # XRF instrument configuration — all distances in cm
 
 paths:
-  element_data:   data/element_params/Data_keV.xlsx
+  compositions:   data/compositions
   output_dir:     results/lab_xrf
 
-concentration_cols: ["soil_14163"]
+# Samples to run: file names in paths.compositions, without .yml.
+# Each file lists the mass fraction of each element under `composition:`.
+samples: ["soil_14163"]
 
 # Include secondary (inter-element) K fluorescence enhancement.
 # true → Intensity_ph_s = primary + secondary (matches fisx secondary=2 minus tertiary)

@@ -1,0 +1,14 @@
+# Sample Kr: mass fraction of each element.
+composition:
+  O: 0.450951
+  Na: 0.006454
+  Mg: 0.047218
+  Al: 0.089444
+  Si: 0.245404
+  P: 0.002423
+  K: 0.0044
+  Ca: 0.067396
+  Ti: 0.011388
+  Cr: 0.001779
+  Mn: 0.000929
+  Fe: 0.070113

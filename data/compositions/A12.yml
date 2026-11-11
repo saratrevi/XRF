@@ -1,0 +1,14 @@
+# Sample A12: mass fraction of each element.
+composition:
+  O: 0.42563
+  Na: 0.004006
+  Mg: 0.056083
+  Al: 0.068274
+  Si: 0.216423
+  P: 0.002254
+  K: 0.002573
+  Ca: 0.076472
+  Ti: 0.01798
+  Cr: 0.002326
+  Mn: 0.001704
+  Fe: 0.117374

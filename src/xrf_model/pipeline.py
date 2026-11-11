@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import xraylib
 
-from .io import load_flux_data
+from .io import load_composition, load_flux_data
 from .output import save_mca
 from .spectrum import build_spectrum
 from .plot_spectrum import plot_and_save_spectrum
@@ -176,24 +176,20 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
         d_ref = float(cfg["src_reference_distance_cm"])
         P_eff = flux_raw * (d_ref ** 2)                  # ph/s/keV/sr
 
-    # ── Concentrations ────────────────────────────────────────────────────────
-    df_params = pd.read_excel(cfg["paths"]["element_data"], index_col=0)
-    df_conc   = df_params.loc[:, 'mantle_mars':]
-    conc_cols = cfg["concentration_cols"]
+    # ── Compositions: one file per sample, <paths.compositions>/<sample>.yml ──
+    # Elements are kept in atomic-number order, so results do not depend on
+    # the order in which a file lists them.
+    by_Z = lambda item: xraylib.SymbolToAtomicNumber(item[0])
+    conc_cols = cfg["samples"]
+    concentrations = {
+        s: dict(sorted(load_composition(Path(cfg["paths"]["compositions"]) / f"{s}.yml")
+                       .items(), key=by_Z))
+        for s in conc_cols
+    }
 
-    # Build per-sample dicts from non-zero, non-NaN rows only
-    concentrations = {c: {} for c in conc_cols}
-    for el in df_conc.index:
-        for c in conc_cols:
-            w = df_conc.at[el, c]
-            if pd.notna(w) and float(w) > 0:
-                concentrations[c][el] = float(w)
-
-    # Elements active in at least one sample (preserves Excel row order)
-    active_elements = [
-        el for el in df_conc.index
-        if any(el in concentrations[c] for c in conc_cols)
-    ]
+    # Elements present in at least one sample
+    active_elements = [el for el, _ in sorted(
+        {el: None for c in concentrations.values() for el in c}.items(), key=by_Z)]
     print(f"Active elements: {active_elements}")
 
     element_properties = ElementProperties(active_elements)

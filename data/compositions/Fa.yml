@@ -1,0 +1,13 @@
+# Sample Fa: mass fraction of each element.
+composition:
+  O: 0.465335
+  Na: 0.002671
+  Mg: 0.001568
+  Al: 0.188415
+  Si: 0.208009
+  K: 0.000125
+  Ca: 0.145798
+  Ti: 0.00012
+  Cr: 2.1e-05
+  Mn: 4.6e-05
+  Fe: 0.001632

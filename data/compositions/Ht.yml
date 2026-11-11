@@ -1,0 +1,13 @@
+# Sample Ht: mass fraction of each element.
+composition:
+  O: 0.405479
+  Na: 0.002671
+  Mg: 0.050656
+  Al: 0.046575
+  Si: 0.176691
+  K: 0.000415
+  Ca: 0.076472
+  Ti: 0.077915
+  Cr: 0.002805
+  Mn: 0.002091
+  Fe: 0.15313

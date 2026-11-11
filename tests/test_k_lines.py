@@ -47,7 +47,7 @@ def table(tmp_path_factory):
     cfg = {k: v for k, v in cfg.items() if k not in local}
     cfg.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1, atmosphere="vacuum")
     cfg["paths"] = dict(cfg["paths"], output_dir=str(tmp_path_factory.mktemp("k")))
-    return run_one_grid(TUBE_FILE, cfg)[cfg["concentration_cols"][0]]["fluorescence"]
+    return run_one_grid(TUBE_FILE, cfg)[cfg["samples"][0]]["fluorescence"]
 
 
 def test_ba_k_alpha_shows_two_peaks(table):

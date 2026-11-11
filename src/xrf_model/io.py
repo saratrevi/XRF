@@ -1,7 +1,44 @@
 # src/xrf_model/io.py
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
+import xraylib
+import yaml
+
+
+def load_composition(path) -> dict:
+    """
+    Read a sample composition file (YAML): {element symbol: mass fraction}.
+
+    The file has a `composition:` mapping, e.g.
+        composition:
+          O: 0.437
+          Si: 0.221
+    Other keys (source, notes) are allowed and ignored.  Elements with a
+    fraction of 0 are skipped.  Only the ratios between the fractions matter
+    for this model, so the sum does not have to be exactly 1.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Composition file not found: {path}")
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    comp = data.get("composition")
+    if not isinstance(comp, dict) or not comp:
+        raise ValueError(f"{path}: needs a non-empty 'composition:' mapping")
+    out = {}
+    for el, w in comp.items():
+        try:
+            xraylib.SymbolToAtomicNumber(str(el))
+        except ValueError:
+            raise ValueError(f"{path}: '{el}' is not an element symbol") from None
+        w = float(w)
+        if w < 0:
+            raise ValueError(f"{path}: {el} has a negative mass fraction ({w})")
+        if w > 0:
+            out[str(el)] = w
+    return out
 
 
 def load_flux_data(txt_filepath: str):

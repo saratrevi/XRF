@@ -49,7 +49,7 @@ def load_config(yaml_path: str | Path) -> dict:
     # Resolve paths
     paths = cfg.get("paths", {})
     cfg["paths"] = {
-        "element_data": str((root / paths["element_data"]).resolve()),
+        "compositions": str((root / paths["compositions"]).resolve()),
         "output_dir": str((root / paths["output_dir"]).resolve()),
     }
 

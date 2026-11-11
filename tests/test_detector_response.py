@@ -148,7 +148,7 @@ def test_pipeline_writes_the_spectrum_on_the_matrix_channels(tmp_path):
     cfg.update(src_reference_distance_cm=0.56, grid_n_x=1, grid_n_y=1,
                detector_response={"file": str(matrix), "rows": "per_detected_photon"})
     cfg["paths"] = dict(cfg["paths"], output_dir=str(tmp_path / "out"))
-    sample = cfg["concentration_cols"][0]
+    sample = cfg["samples"][0]
     r = run_one_grid(TUBE_FILE, cfg)[sample]
 
     spec = pd.read_excel(next(Path(r["out_dir"]).glob(f"*_{sample}_spectrum.xlsx")))
