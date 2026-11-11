@@ -13,7 +13,8 @@ can be opened directly in **PyMCA**.
 - **Primary K fluorescence** (Kα, Kβ groups) via the Shiraiwa–Fujino integral
 - **Secondary (inter-element) K fluorescence** — enhancement of a lighter element
   by the lines of a heavier one (toggle `include_secondary`)
-- **L-shell fluorescence** (all L lines with non-zero radiative rate)
+- **L-shell fluorescence** (all L lines with non-zero radiative rate), with
+  Coster–Kronig transfers and the K→L vacancy cascade
 - **Coherent (Rayleigh) scattering** using anomalous form factors
 - **Incoherent (Compton) scattering** via Klein–Nishina × incoherent scatter
   function, Doppler-broadened with the sample's shell Compton profiles

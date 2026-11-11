@@ -83,100 +83,78 @@ def compute_k_fluorescence(
     return np.trapezoid(integrand, x=E_sub)
 
 
-def compute_l_fluorescence(
-    energy_array,
-    flux_array,
-    Z,
-    sinPhi,
-    sinPsi,
-    total_atten_sample_array,
-    f_atten_interp,
-):
+def l_line_cross_sections(Z, energy_array):
     """
-    L-shell fluorescence with Coster-Kronig vacancy-cascade corrections.
+    L-line production cross sections of element Z on the energy grid [cm²/g].
 
-    sinPhi, sinPsi : per-cell sinΦ and sinΨ from GridGeometry — required,
-                     no cfg fallback.
+    Uses xraylib.CS_FluorLine_Kissel_Cascade, which counts every way an L
+    vacancy is made: direct L1/L2/L3 photoionisation, Coster-Kronig transfers
+    between the L sub-shells, and the K→L cascade (radiative and Auger) after
+    a K-shell ionisation above the K edge.  The fluorescence yield and the
+    line's radiative rate are included.
 
-    Returns a list of dicts — one per L line with E_line > 0 and rad_rate > 0:
-        line_name, E_line, rad_rate, I_raw
-    I_raw = ω_Li · N_Li_eff · RadRate.  Caller multiplies by w and (Ω/4π)·ΔS.
+    Depends only on Z and the energy grid, so it is computed once per run.
+    Lines are kept only for Z ≥ 29 (lighter L lines lie below the grid).
 
-    Cascade equations
-    -----------------
-    N_L1 = ∫ φ · σ_L1(E) / denom dE
-    N_L2 = ∫ φ · σ_L2(E) / denom dE  +  f12 · N_L1
-    N_L3 = ∫ φ · σ_L3(E) / denom dE  +  f23 · N_L2  +  f13 · N_L1
-
-    xraylib calls: CS_Photo_Partial, FluorYield, CosKronTransProb, RadRate, LineEnergy.
+    Returns a list of dicts: line_name, E_line, rad_rate, sigma (array).
     """
     if Z < 29:
         return []
 
-    geom = sinPhi / sinPsi
-
-    def _safe(fn, *args):
+    lines = []
+    for line_name, line_const, _ in _L_LINES:
         try:
-            v = fn(*args)
-            return float(v) if np.isfinite(v) else 0.0
-        except Exception:
-            return 0.0
-
-    f12 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL12_TRANS)
-    f13 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL13_TRANS)
-    f23 = _safe(xraylib.CosKronTransProb, Z, xraylib.FL23_TRANS)
-
-    omega_L = [
-        _safe(xraylib.FluorYield, Z, xraylib.L1_SHELL),
-        _safe(xraylib.FluorYield, Z, xraylib.L2_SHELL),
-        _safe(xraylib.FluorYield, Z, xraylib.L3_SHELL),
-    ]
-
-    # Partial photoionisation arrays — depend on Z and E only, not on cell geometry.
-    sigma_L = [
-        np.array([_safe(xraylib.CS_Photo_Partial, Z, sh, E) for E in energy_array])
-        for sh in [xraylib.L1_SHELL, xraylib.L2_SHELL, xraylib.L3_SHELL]
-    ]
-
-    edge_L = [
-        _safe(xraylib.EdgeEnergy, Z, xraylib.L1_SHELL),
-        _safe(xraylib.EdgeEnergy, Z, xraylib.L2_SHELL),
-        _safe(xraylib.EdgeEnergy, Z, xraylib.L3_SHELL),
-    ]
-    sigma_L = [
-        np.where(energy_array >= edge_L[i], sigma_L[i], 0.0)
-        for i in range(3)
-    ]
-
-    rows = []
-    for line_name, line_const, shell_idx in _L_LINES:
-        E_line   = _safe(xraylib.LineEnergy, Z, line_const)
-        rad_rate = _safe(xraylib.RadRate,    Z, line_const)
+            E_line = xraylib.LineEnergy(Z, line_const)
+            rad_rate = xraylib.RadRate(Z, line_const)
+        except ValueError:            # line not tabulated for this element
+            continue
         if E_line <= 0.0 or rad_rate <= 0.0:
             continue
+        sigma = np.zeros(len(energy_array))
+        for i, E in enumerate(energy_array):
+            try:
+                sigma[i] = xraylib.CS_FluorLine_Kissel_Cascade(Z, line_const, float(E))
+            except ValueError:        # below the edge of the line's sub-shell
+                pass
+        lines.append({"line_name": line_name, "E_line": E_line,
+                      "rad_rate": rad_rate, "sigma": sigma})
+    return lines
 
-        denom = total_atten_sample_array + geom * float(f_atten_interp(E_line))
-        raw_L = [
-            np.trapezoid(
-                np.where(denom > 0.0, flux_array * sigma / denom, 0.0),
-                x=energy_array,
-            )
-            for sigma in sigma_L
-        ]
 
-        N_L1 = raw_L[0]
-        N_L2 = raw_L[1] + f12 * N_L1
-        N_L3 = raw_L[2] + f23 * N_L2 + f13 * N_L1
-        N_eff = [N_L1, N_L2, N_L3]
+def compute_l_fluorescence(
+    energy_array,
+    flux_array,
+    sinPhi,
+    sinPsi,
+    total_atten_sample_array,
+    f_atten_interp,
+    l_lines,
+):
+    """
+    L-shell fluorescence, including Coster-Kronig and the K→L cascade.
 
-        I_raw = omega_L[shell_idx] * N_eff[shell_idx] * rad_rate
+    sinPhi, sinPsi : per-cell sinΦ and sinΨ from GridGeometry.
+    l_lines        : this element's lines from l_line_cross_sections.
+
+    Returns a list of dicts — one per line:
+        line_name, E_line, rad_rate, I_raw
+    I_raw = ∫ φ · σ_line(E) / [μ(E) + (sinΦ/sinΨ)·μ(E_line)] dE.
+    Caller multiplies by w and (Ω/4π)·ΔS.
+    """
+    geom = sinPhi / sinPsi
+    rows = []
+    for line in l_lines:
+        denom = total_atten_sample_array + geom * float(f_atten_interp(line["E_line"]))
+        I_raw = np.trapezoid(
+            np.where(denom > 0.0, flux_array * line["sigma"] / denom, 0.0),
+            x=energy_array,
+        )
         rows.append({
-            "line_name": line_name,
-            "E_line":    E_line,
-            "rad_rate":  rad_rate,
+            "line_name": line["line_name"],
+            "E_line":    line["E_line"],
+            "rad_rate":  line["rad_rate"],
             "I_raw":     I_raw,
         })
-
     return rows
 
 

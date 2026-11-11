@@ -16,6 +16,7 @@ from .physics import (
     compute_k_fluorescence,
     compute_k_secondary_fluorescence,
     compute_l_fluorescence,
+    l_line_cross_sections,
     compute_coherent_cross_section,
     compute_incoherent_cross_section,
     precompute_anomalous_factors,
@@ -172,6 +173,11 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
         E_Kb, P_Kb = _k_group(Z, ["KB1_LINE", "KB2_LINE", "KB3_LINE"])
         k_params[el] = dict(Z=Z, E_edge=E_edge, wK=wK, R_jump=R_jump,
                             E_Ka=E_Ka, P_Ka=P_Ka, E_Kb=E_Kb, P_Kb=P_Kb)
+
+    # L-line cross sections (with Coster-Kronig and K→L cascade) depend only on
+    # Z and E: compute once per element, reuse in every cell and sample.
+    l_lines_by_el = {el: l_line_cross_sections(kp["Z"], energy_kev)
+                     for el, kp in k_params.items()}
 
     # Secondary fluorescence toggle (default on)
     include_secondary = bool(cfg.get("include_secondary", True))
@@ -420,8 +426,8 @@ def run_one_grid(flux_file, cfg: dict, debugging: bool = False) -> dict:
 
                     # L-shell (all lines with non-zero rate for this Z)
                     for r in compute_l_fluorescence(
-                        energy_kev, phi_mn, Z, sinPhi, sinPsi,
-                        sample_mu, f_mu_interp,
+                        energy_kev, phi_mn, sinPhi, sinPsi,
+                        sample_mu, f_mu_interp, l_lines_by_el[el],
                     ):
                         key = (el, r["line_name"])
                         T_L = np.exp(-float(mu_air(r["E_line"])) * L_out)
