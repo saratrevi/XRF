@@ -154,6 +154,10 @@ def test_pipeline_writes_the_spectrum_on_the_matrix_channels(tmp_path):
     spec = pd.read_excel(next(Path(r["out_dir"]).glob(f"*_{sample}_spectrum.xlsx")))
     assert len(spec) == 11000
     assert np.allclose(np.diff(spec.Energy_keV), WIDTH)
+    # the returned spectrum is the saved one, on the matrix channels
+    # (.xlsx keeps ~15 significant digits, so compare to 1e-12)
+    np.testing.assert_allclose(r["spectrum_energy"], spec.Energy_keV.to_numpy(), rtol=1e-12)
+    np.testing.assert_allclose(r["spectrum"], spec.Intensity_ph_s_per_keV.to_numpy(), rtol=1e-12)
 
     E = r["energy"]
     eff = lambda e: (transmission_be(e, cfg["be_window_mm"])

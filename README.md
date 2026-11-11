@@ -56,8 +56,11 @@ depend on distance.
 
 ## Outputs
 
-For each sample column, results are written under `results/<config>/<run>_grid/`
-(the `results/` tree is git-ignored):
+For each sample, results are written under `results/<config>/<run>_grid/`
+(the `results/` tree is git-ignored). `run_one_grid` also returns them, per
+sample: `fluorescence` (line table), `energy`, `I_coherent`, `I_incoherent`,
+and the detector spectrum `spectrum_energy` / `spectrum` (the same one as in
+the files below).
 
 | File | Contents |
 |------|----------|
@@ -68,8 +71,8 @@ For each sample column, results are written under `results/<config>/<run>_grid/`
 | `*_spectrum.png` | plot of the spectrum with annotated geometry |
 
 > **Note on the `.mca` file:** the spectrum is a density in `ph/s/keV`, while an
-> `.mca` stores integer counts per channel. The conversion is
-> `counts = round(spectrum × dE_keV × live_time)` (see
+> `.mca` stores integer counts per channel. Each channel gets the spectrum
+> integrated over its energy range × live time, rounded (see
 > [`output.py`](src/xrf_model/output.py)). With the default `live_time = 1 s`,
 > channels below ~0.5 ph/s round to zero — increase `mca_live_time_s` in the
 > config to preserve faint features.
@@ -186,7 +189,9 @@ python -m ipykernel install --user --name xrf-venv --display-name "Python (XRF .
 jupyter notebook notebooks/xrf.ipynb
 ```
 
-Select the **Python (XRF .venv)** kernel. The first cell adds `src/` to the path:
+Select the **Python (XRF .venv)** kernel. The notebook runs `lab_xrf.yml` and
+shows the strongest lines and the detector spectrum of the first sample. Its
+setup cell adds `src/` to the path:
 
 ```python
 from pathlib import Path

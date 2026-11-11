@@ -543,12 +543,15 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
                                conc_label=conc, geo_info=geo_info)
 
         results_dict[conc] = {
-            "energy":        energy_kev,
-            "I_coherent":    I_coh_total,
-            "I_incoherent":  I_incoh_total,
-            "fluorescence":  df_fluo,
-            "out_dir":       str(out_dir),
-            "n_valid_cells": n_valid,
+            "energy":          energy_kev,
+            "I_coherent":      I_coh_total,
+            "I_incoherent":    I_incoh_total,
+            "fluorescence":    df_fluo,
+            # detector spectrum [ph/s/keV], the same one written to .xlsx/.dat/.mca
+            "spectrum_energy": spec_energy,
+            "spectrum":        spectrum,
+            "out_dir":         str(out_dir),
+            "n_valid_cells":   n_valid,
         }
 
     return results_dict
