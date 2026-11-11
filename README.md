@@ -160,7 +160,7 @@ run_one_grid(None, load_config('configs/lab_xrf.yml'))"
 ## Tests
 
 From the repo folder (pytest is in the `dev` dependency group; with pip,
-`pip install pytest`):
+`pip install pytest`), or from anywhere as `pytest <repo>/tests`:
 
 ```bash
 pytest
@@ -206,7 +206,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 ## Configuration reference
 
-Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml)):
+Key fields in a `configs/*.yml` (see [`configs/lab_xrf.yml`](configs/lab_xrf.yml)).
+Relative paths, in the config and for a flux file passed to `run_one_grid`, are
+taken from the repository folder, whatever folder Python is started in;
+absolute paths are used as they are.
 
 | Field | Meaning |
 |-------|---------|

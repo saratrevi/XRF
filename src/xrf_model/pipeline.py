@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import xraylib
 
+from .config import repo_path
 from .io import load_composition, load_flux_data
 from .output import save_mca
 from .spectrum import build_spectrum
@@ -166,7 +167,7 @@ def run_one_grid(flux_file, cfg: dict) -> dict:
         raise ValueError("No source spectrum: pass a flux file or add a "
                          "`tube:` block to the config.")
     else:
-        flux_file = Path(flux_file)
+        flux_file = repo_path(flux_file)      # relative paths: from the repository
         run_name  = flux_file.stem
         energy_kev, flux_raw = load_flux_data(str(flux_file))
 
